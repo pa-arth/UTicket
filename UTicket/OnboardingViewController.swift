@@ -25,6 +25,15 @@ class OnboardingViewController: UIViewController {
     private func setupUI() {
         // Placeholder for initial UI setup (e.g., setting button corner radius if not done in Storyboard)
     }
+    // MARK: - Navigation Helper
+    private func navigateToNextScreen(email: String) {
+        let role = roleSelectionTextField.text?.lowercased() ?? ""
+        if role.contains("buyer") {
+            performSegue(withIdentifier: "showExplore", sender: email)          // → ExploreTickets
+        } else {
+            performSegue(withIdentifier: "showProfileCreation", sender: email)  // → ProfileCreation
+        }
+    }
 
     // MARK: - Actions (IBActions)
     @IBAction func loginButtonTapped(_ sender: UIButton) {
@@ -35,25 +44,21 @@ class OnboardingViewController: UIViewController {
             return
         }
 
-        // 🔑 Firebase Login Placeholder
-        // Use your Firebase SDK to sign the user in.
-        /*
-        Auth.auth().signIn(withEmail: email, password: password) { [weak self] authResult, error in
-            if let error = error {
-                // Handle Firebase login error
-                print("Login failed: \(error.localizedDescription)")
-                return
-            }
-            
-            // Navigate to the next screen (e.g., Profile Creation) on successful login.
-            self?.navigateToProfileCreation()
-        }
-        */
         
         // TEMPORARY: Simulate successful login for navigation test
-        print("Simulating login attempt with email: \(email)")
-        navigateToProfileCreation()
+        Swift.print("Simulating login attempt with email: \(email)")
+        navigateToNextScreen(email: email)
+
     }
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        if segue.identifier == "showProfileCreation",
+           let email = sender as? String,
+           let dest = segue.destination as? ProfileCreationViewController {
+            dest.loadViewIfNeeded()
+            dest.emailDisplayTextField.text = email
+        }
+    }
+
     
     // Placeholder function for navigation
     private func navigateToProfileCreation() {
@@ -61,3 +66,20 @@ class OnboardingViewController: UIViewController {
         print("Navigating to Profile Creation Screen...")
     }
 }
+
+
+
+// 🔑 Firebase Login Placeholder
+// Use your Firebase SDK to sign the user in.
+/*
+Auth.auth().signIn(withEmail: email, password: password) { [weak self] authResult, error in
+    if let error = error {
+        // Handle Firebase login error
+        print("Login failed: \(error.localizedDescription)")
+        return
+    }
+    
+    // Navigate to the next screen (e.g., Profile Creation) on successful login.
+    self?.navigateToProfileCreation()
+}
+*/

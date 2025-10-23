@@ -7,17 +7,6 @@
 
 import UIKit
 
-struct TicketListing {
-    let eventName: String
-    let price: String
-    let date: String
-    let time: String
-    let location: String
-    let seatInfo: String
-    let status: String
-    let image: UIImage
-}
-
 class SellerDashboardViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
 
     @IBOutlet weak var sellerDashboardTableView: UITableView!
