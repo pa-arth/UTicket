@@ -35,9 +35,6 @@ class OnboardingViewController: UIViewController {
             return
         }
 
-        // 🔑 Firebase Login Placeholder
-        // Use your Firebase SDK to sign the user in.
-        /*
         Auth.auth().signIn(withEmail: email, password: password) { [weak self] authResult, error in
             if let error = error {
                 // Handle Firebase login error
@@ -48,7 +45,6 @@ class OnboardingViewController: UIViewController {
             // Navigate to the next screen (e.g., Profile Creation) on successful login.
             self?.navigateToProfileCreation()
         }
-        */
         
         // TEMPORARY: Simulate successful login for navigation test
         print("Simulating login attempt with email: \(email)")
