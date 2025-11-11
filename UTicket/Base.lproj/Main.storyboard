@@ -65,13 +65,14 @@
                                 <nil key="textColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
-                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="run-kT-s0V">
+                            <button opaque="NO" contentMode="scaleToFill" fixedFrame="YES" contentHorizontalAlignment="center" contentVerticalAlignment="center" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="run-kT-s0V">
                                 <rect key="frame" x="64" y="714" width="274" height="35"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                                 <color key="tintColor" red="0.74901960779999999" green="0.3411764706" blue="0.0" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                                 <state key="normal" title="Button"/>
                                 <buttonConfiguration key="configuration" style="filled" title="Login">
                                     <fontDescription key="titleFontDescription" type="boldSystem" pointSize="17"/>
+                                    <color key="baseBackgroundColor" red="0.67575747080000004" green="0.33312819240000002" blue="0.034208976520000003" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                 </buttonConfiguration>
                                 <connections>
                                     <action selector="loginButtonTapped:" destination="BYZ-38-t0r" eventType="touchUpInside" id="BOT-6V-IPE"/>
@@ -554,6 +555,7 @@
                     <toolbarItems/>
                     <navigationItem key="navigationItem" id="ymm-kG-5x6">
                         <barButtonItem key="rightBarButtonItem" title="Wishlist" id="IWc-f9-Bv3">
+                            <color key="tintColor" red="0.67575747080000004" green="0.33312819240000002" blue="0.034208976520000003" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                             <connections>
                                 <segue destination="bFT-BG-Rqq" kind="show" identifier="showWishlist" id="uwH-b7-mr9"/>
                             </connections>
@@ -595,13 +597,17 @@
                                 <nil key="highlightedColor"/>
                             </label>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="hq6-mc-xvl">
-                                <rect key="frame" x="16" y="740" width="370" height="48"/>
+                                <rect key="frame" x="40" y="724" width="322" height="48"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="48" id="3CU-vL-Srd"/>
+                                    <constraint firstAttribute="height" constant="48" id="q2D-4s-dnh"/>
                                 </constraints>
                                 <color key="tintColor" red="0.69019448760000002" green="0.18704905103144975" blue="0.0074383196072797704" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                 <state key="normal" title="Button"/>
-                                <buttonConfiguration key="configuration" style="plain" title="Initiate Purchase"/>
+                                <buttonConfiguration key="configuration" style="filled" title="Initiate Purchase" cornerStyle="capsule" titleAlignment="center">
+                                    <fontDescription key="titleFontDescription" type="boldSystem" pointSize="17"/>
+                                    <color key="baseForegroundColor" red="0.89733678959999996" green="0.89733678959999996" blue="0.89733678959999996" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                                    <color key="baseBackgroundColor" red="0.71212183940412377" green="0.35105473690667777" blue="0.036049855659164257" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                                </buttonConfiguration>
                                 <connections>
                                     <action selector="initiatePurchaseTapped:" destination="yyu-mx-gR6" eventType="touchUpInside" id="vZN-bT-TeE"/>
                                 </connections>
@@ -610,18 +616,18 @@
                         <viewLayoutGuide key="safeArea" id="ahd-iq-nas"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
+                            <constraint firstItem="ahd-iq-nas" firstAttribute="bottom" secondItem="hq6-mc-xvl" secondAttribute="bottom" constant="40" id="3KS-n5-a3w"/>
                             <constraint firstItem="ahd-iq-nas" firstAttribute="trailing" secondItem="SNv-Kv-VSw" secondAttribute="trailing" constant="16" id="Bsh-2P-1y4"/>
-                            <constraint firstItem="ahd-iq-nas" firstAttribute="bottom" secondItem="hq6-mc-xvl" secondAttribute="bottom" constant="24" id="C3u-HR-3zp"/>
                             <constraint firstItem="mI1-Bp-gQ3" firstAttribute="top" secondItem="ahd-iq-nas" secondAttribute="top" constant="16" id="HVw-Db-PYA"/>
                             <constraint firstItem="SNv-Kv-VSw" firstAttribute="top" secondItem="mI1-Bp-gQ3" secondAttribute="bottom" constant="12" id="X19-Ja-DZg"/>
-                            <constraint firstItem="hq6-mc-xvl" firstAttribute="leading" secondItem="ahd-iq-nas" secondAttribute="leading" constant="16" id="XUb-3G-oW3"/>
                             <constraint firstItem="ayy-3R-jqL" firstAttribute="top" secondItem="SNv-Kv-VSw" secondAttribute="bottom" constant="8" id="aee-Ud-yUm"/>
+                            <constraint firstItem="hq6-mc-xvl" firstAttribute="leading" secondItem="ahd-iq-nas" secondAttribute="leading" constant="40" id="cGB-Kh-ZNM"/>
                             <constraint firstItem="mI1-Bp-gQ3" firstAttribute="leading" secondItem="ahd-iq-nas" secondAttribute="leading" constant="16" id="dsJ-cA-1hX"/>
                             <constraint firstItem="ahd-iq-nas" firstAttribute="trailing" secondItem="mI1-Bp-gQ3" secondAttribute="trailing" constant="16" id="h4g-ZN-KuO"/>
-                            <constraint firstItem="ahd-iq-nas" firstAttribute="trailing" secondItem="hq6-mc-xvl" secondAttribute="trailing" constant="16" id="noT-A2-Xdb"/>
                             <constraint firstItem="SNv-Kv-VSw" firstAttribute="leading" secondItem="ahd-iq-nas" secondAttribute="leading" constant="16" id="nvn-Sc-t2s"/>
                             <constraint firstItem="ayy-3R-jqL" firstAttribute="leading" secondItem="ahd-iq-nas" secondAttribute="leading" constant="16" id="tB1-ZF-8fJ"/>
                             <constraint firstItem="ahd-iq-nas" firstAttribute="trailing" secondItem="ayy-3R-jqL" secondAttribute="trailing" constant="16" id="uHI-Fj-q8F"/>
+                            <constraint firstItem="ahd-iq-nas" firstAttribute="trailing" secondItem="hq6-mc-xvl" secondAttribute="trailing" constant="40" id="uNX-f0-Ais"/>
                         </constraints>
                     </view>
                     <navigationItem key="navigationItem" id="bI5-a8-fNf"/>
@@ -661,9 +667,13 @@
                                 <constraints>
                                     <constraint firstAttribute="height" constant="48" id="zOI-tc-F6K"/>
                                 </constraints>
-                                <color key="tintColor" red="0.69019448760000002" green="0.18704905099999999" blue="0.0074383196070000003" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                                <color key="tintColor" red="0.67575747080000004" green="0.33312819240000002" blue="0.034208976520000003" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
                                 <state key="normal" title="Button"/>
-                                <buttonConfiguration key="configuration" style="plain" title="Explore Tickets"/>
+                                <buttonConfiguration key="configuration" style="filled" title="Explore Tickets" cornerStyle="capsule" titleAlignment="center">
+                                    <fontDescription key="titleFontDescription" type="boldSystem" pointSize="17"/>
+                                    <color key="baseForegroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                    <color key="baseBackgroundColor" red="0.67575747080000004" green="0.33312819240000002" blue="0.034208976520000003" alpha="1" colorSpace="custom" customColorSpace="displayP3"/>
+                                </buttonConfiguration>
                                 <connections>
                                     <action selector="backToExploreTapped:" destination="nkg-Sc-KJU" eventType="touchUpInside" id="Xlt-5J-eFN"/>
                                 </connections>
@@ -756,7 +766,7 @@
         </scene>
     </scenes>
     <inferredMetricsTieBreakers>
-        <segue reference="3Uv-oJ-3ww"/>
+        <segue reference="ftT-Dl-29M"/>
         <segue reference="wej-Jm-9zA"/>
     </inferredMetricsTieBreakers>
     <resources>
