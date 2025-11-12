@@ -10,6 +10,7 @@ import FirebaseFirestore
 
 class SellerListingViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
+    private let db = Firestore.firestore()
     // MARK: - UI Connections (IBOutlets)
     private var selectedTicketImage: UIImage?
     
