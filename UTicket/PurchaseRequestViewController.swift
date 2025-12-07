@@ -5,9 +5,11 @@
 //  Created by Naveed Sadarulanam on 10/21/25.
 //
 
+// Change this into a ticket detail screen with the approve buyer elements hidden unless this ticket is marked as purchaseInterest
+
 import UIKit
 
-class PurchaseRequestViewController: UIViewController {
+class PurchaseRequestViewController: BaseViewController {
 
     @IBOutlet weak var requestedTicketLabel: UILabel!
     
@@ -18,24 +20,12 @@ class PurchaseRequestViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        // Placeholder ticket until data is passed from previous VC
-        if ticket == nil {
-            ticket = TicketListing(
-                eventName: "Sam Houston vs Texas Longhorns",
-                price: "$200",
-                date: "6 Oct",
-                time: "7 PM",
-                location: "DKR Texas Memorial Stadium",
-                seatInfo: "29 Section, 41 Row, 4,5 Seat\n2 Tickets",
-                status: "Pending",
-                image: UIImage(named: "sample_ticket") ?? UIImage()
-            )
-        }
-        
+
         // Display ticket info
         if let t = ticket {
-            requestedTicketLabel.text = "\(t.eventName)\n\(t.price)\n\(t.date), \(t.time)\n\(t.location)\n\(t.seatInfo)\nStatus: \(t.status)"
+            let dateTime = t.eventDate != nil ? "\(t.eventDate ?? ""), \(t.eventTime)" : t.eventTime
+            let status = t.isSold ? "Sold" : "Available"
+            requestedTicketLabel.text = "\(t.eventName)\n\(t.price)\n\(dateTime)\n\(t.seatDetails)\nStatus: \(status)"
             requestedTicketLabel.numberOfLines = 7
                 }
     }

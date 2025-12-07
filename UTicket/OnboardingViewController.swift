@@ -5,151 +5,162 @@
 //  Created by Paarth Jamdagneya on 11/11/25.
 //
 import UIKit
-import FirebaseAuth // Required for Firebase Login
+import FirebaseAuth
 
-// 🔑 Must conform to the PickerView protocols
 class OnboardingViewController: UIViewController, UIPickerViewDelegate, UIPickerViewDataSource {
 
-    // MARK: - UI Connections (IBOutlets)
     @IBOutlet weak var emailTextField: UITextField!
     @IBOutlet weak var passwordTextField: UITextField!
     @IBOutlet weak var roleSelectionTextField: UITextField!
     @IBOutlet weak var loginButton: UIButton!
 
-    // 🔑 Role Selection Properties
     private let rolePicker = UIPickerView()
     private let roles = ["Buyer", "Seller"]
 
-    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        setupRolePicker() // 🔑 Call new setup function
+        setupRolePicker()
         setupUI()
     }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Reset form when view appears (important after logout)
+        resetForm()
+    }
+    
+    private func resetForm() {
+        // Clear text fields
+        emailTextField.text = ""
+        passwordTextField.text = ""
+        
+        // Reset role picker to first option (Buyer)
+        rolePicker.selectRow(0, inComponent: 0, animated: false)
+        roleSelectionTextField.text = roles.first
+        
+        // Re-enable login button
+        loginButton.isEnabled = true
+    }
 
-    // MARK: - Setup
     private func setupUI() {
-        // Example: Optional styling
         loginButton.layer.cornerRadius = 8
     }
 
-    // 🔑 Setup the Picker View
     private func setupRolePicker() {
         rolePicker.delegate = self
         rolePicker.dataSource = self
-        
-        // 1. Set the PickerView as the input view for the TextField
         roleSelectionTextField.inputView = rolePicker
-        
-        // 2. Set an initial default value
         roleSelectionTextField.text = roles.first
-        
-        // 3. Add a toolbar/Done button to dismiss the picker
         addDoneToolbar()
     }
-    
-    // 🔑 Add a Done button above the picker for dismissal
+
     private func addDoneToolbar() {
         let toolbar = UIToolbar()
         toolbar.sizeToFit()
-        let doneButton = UIBarButtonItem(title: "Done", style: .plain, target: self, action: #selector(dismissPicker))
+        let doneButton = UIBarButtonItem(title: "Done",
+                                         style: .plain,
+                                         target: self,
+                                         action: #selector(dismissPicker))
         toolbar.setItems([doneButton], animated: false)
         roleSelectionTextField.inputAccessoryView = toolbar
     }
 
     @objc func dismissPicker() {
-        view.endEditing(true) // Dismisses the input view (the picker)
+        view.endEditing(true)
     }
 
-    // MARK: - UIPickerViewDataSource Methods
-
-    func numberOfComponents(in pickerView: UIPickerView) -> Int {
-        return 1
-    }
-
-    func pickerView(_ pickerView: UIPickerView, numberOfRowsInComponent component: Int) -> Int {
-        return roles.count
-    }
-
-    // MARK: - UIPickerViewDelegate Methods
-
-    func pickerView(_ pickerView: UIPickerView, titleForRow row: Int, forComponent component: Int) -> String? {
-        return roles[row]
-    }
-
+    func numberOfComponents(in pickerView: UIPickerView) -> Int { 1 }
+    func pickerView(_ pickerView: UIPickerView, numberOfRowsInComponent component: Int) -> Int { roles.count }
+    func pickerView(_ pickerView: UIPickerView, titleForRow row: Int, forComponent component: Int) -> String? { roles[row] }
     func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
-        // Update the text field with the selected value
         roleSelectionTextField.text = roles[row]
     }
 
-    // MARK: - Navigation Helper
-    /**
-     Determines the next screen based on the selected role and performs the segue.
-     - Parameter email: The email of the successfully logged-in user.
-     */
-    private func navigateToNextScreen(email: String) {
-        // Get the selected role, defaulting to an empty string if nil
+    // MARK: - Navigation WITHOUT segues
+    private func navigateToNextScreen() {
         let role = roleSelectionTextField.text?.lowercased() ?? ""
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
 
-        // Use starts(with:) for safer matching
         if role.starts(with: "buyer") {
-            // Buyer Role: Go to the main exploration/ticket listing screen
-            performSegue(withIdentifier: "showExplore", sender: nil)
+            if let exploreVC = storyboard.instantiateViewController(withIdentifier: "ExploreVC") as? UIViewController,
+               let navController = self.navigationController {
+                navController.pushViewController(exploreVC, animated: true)
+            }
         } else if role.starts(with: "seller") {
-            // Seller Role: Go to the profile creation screen to finish setup
-            performSegue(withIdentifier: "showProfileCreation", sender: email)
+            if let sellerVC = storyboard.instantiateViewController(withIdentifier: "sellerListing") as? UIViewController,
+               let navController = self.navigationController {
+                navController.pushViewController(sellerVC, animated: true)
+            }
         } else {
-            // This should rarely happen now that selection is forced
-            print("Error: Invalid role selected for navigation.")
+            print("Invalid role selected.")
         }
     }
 
-    // MARK: - Actions (IBActions)
     @IBAction func loginButtonTapped(_ sender: UIButton) {
-        // 1. Basic Validation
         guard let email = emailTextField.text, !email.isEmpty,
               let password = passwordTextField.text, !password.isEmpty else {
-            // Show alert to user to fill in all fields
-            print("Validation Error: Please enter email and password.")
+            showAlert(title: "Missing Information", message: "Please enter both email and password.")
             return
         }
 
-        // Optional: Disable button and show activity indicator while logging in
         loginButton.isEnabled = false
 
-        // 2. Firebase Login Attempt
         Auth.auth().signIn(withEmail: email, password: password) { [weak self] authResult, error in
-            
-            // Re-enable button after the attempt
-            self?.loginButton.isEnabled = true
+            // Ensure button is re-enabled regardless of outcome
+            defer { self?.loginButton.isEnabled = true }
 
             if let error = error {
-                // Handle Firebase login error (e.g., wrong password, user not found)
-                print("Login failed: \(error.localizedDescription)")
-                // Show an alert to the user with the error message
+                self?.handleLoginError(error)
                 return
             }
 
-            // 3. Successful Login
-            guard let userEmail = authResult?.user.email else {
-                print("Error: Logged in but user email is nil.")
-                return
-            }
-            
-            // Navigate based on the selected role
-            self?.navigateToNextScreen(email: userEmail)
+            self?.navigateToNextScreen()
         }
     }
-
-    // MARK: - Segue Preparation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if segue.identifier == "showProfileCreation",
-           let email = sender as? String,
-           let dest = segue.destination as? ProfileCreationViewController {
-            
-            // Check to make sure the IBOutlet is loaded before accessing it
-            dest.loadViewIfNeeded()
-            dest.emailDisplayTextField.text = email
+    
+    // MARK: - Error Handling
+    
+    private func handleLoginError(_ error: Error) {
+        // Check if the error is a Firebase Auth Error and extract the code
+        guard let authError = AuthErrorCode(rawValue: (error as NSError).code) else {
+            // Fallback for non-Firebase errors (e.g., general networking errors)
+            showAlert(title: "Login Failed", message: error.localizedDescription)
+            return
         }
+        
+        let title = "Login Failed"
+        
+        // Switch on the AuthErrorCode enum itself
+        switch authError {
+        case .wrongPassword:
+            showAlert(title: title, message: "The password you entered is incorrect. Please try again.")
+            
+        case .userNotFound:
+            showAlert(title: title, message: "There is no account associated with this email address. Please check your email or sign up for a new account.")
+            
+        case .invalidEmail:
+            showAlert(title: title, message: "The email address you entered is not valid. Please check and try again.")
+            
+        case .userDisabled:
+            showAlert(title: title, message: "This account has been disabled. Please contact support for assistance.")
+            
+        case .networkError:
+            showAlert(title: "Network Error", message: "Unable to connect to the server. Please check your internet connection and try again.")
+            
+        case .tooManyRequests:
+            showAlert(title: "Too Many Attempts", message: "Too many failed login attempts. Please try again later.")
+            
+        default:
+            // Use the error's built-in localized description for other errors
+            showAlert(title: title, message: error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }

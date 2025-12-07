@@ -1,175 +1,211 @@
 //
-//  SellerListingViewController.swift
-//  UTicket
+//    SellerListingViewController.swift
+//    UTicket
 //
-//  Created by Paarth Jamdagneya on 10/20/25.
-//
+
 import UIKit
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 
-class SellerListingViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+class SellerListingViewController: BaseViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
     private let db = Firestore.firestore()
+    private let listingCollectionName = "ticketListings"
+    
     // MARK: - UI Connections (IBOutlets)
     private var selectedTicketImage: UIImage?
     
-    @IBOutlet weak var uploadImageArea: UIView! // The large box for ticket images
+    @IBOutlet weak var uploadImageArea: UIImageView!
     @IBOutlet weak var eventNameTextField: UITextField!
-    @IBOutlet weak var eventDateDisplay: UITextField! // Or TextField for date/time
-    @IBOutlet weak var eventTimeDisplay: UITextField! // Or TextField for date/time
+    @IBOutlet weak var eventDateDisplay: UITextField!
+    @IBOutlet weak var eventTimeDisplay: UITextField!
+    // ⭐️ ADDED: New outlet for the price input
+    @IBOutlet weak var priceTextField: UITextField!
     @IBOutlet weak var seatDetailsTextField: UITextField!
     @IBOutlet weak var addListingButton: UIButton!
-    @IBOutlet weak var skipButton: UIButton!
-
+    
     // MARK: - Lifecycle
-        override func viewDidLoad() {
-            super.viewDidLoad()
-            setupUI()
-            
-            // Add tap gesture to open image picker
-            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(uploadTicketImageTapped))
-            uploadImageArea.addGestureRecognizer(tapGesture)
-            uploadImageArea.isUserInteractionEnabled = true
-            
-            // Initial setup for date/time to match the image
-            eventDateDisplay.text = "Oct 6, 2025" // Placeholder
-            eventTimeDisplay.text = "09 : 41" // Placeholder
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        // Add tap gesture to open image picker
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(uploadTicketImageTapped))
+        uploadImageArea.addGestureRecognizer(tapGesture)
+        uploadImageArea.isUserInteractionEnabled = true
+        
+        // Set placeholder upload icon
+        let uploadIcon = UIImage(systemName: "square.and.arrow.up") // SF Symbol
+        uploadImageArea.image = uploadIcon
+        uploadImageArea.tintColor = .systemGray
+        uploadImageArea.contentMode = .scaleAspectFit
+    }
+    
+    // MARK: - Firebase Storage Upload (No change needed)
+    
+    /// Uploads an image to Firebase Storage and returns the download URL
+    private func uploadImageAndGetURL(image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
+        
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            DispatchQueue.main.async { completion(.failure(NSError(domain: "ImageConversionError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to convert image to JPEG."]))) }
+            return
         }
         
-        // MARK: - Setup
-        private func setupUI() {
-            // Example: Setting the Skip button border in code if not done in Storyboard
-            skipButton.layer.borderColor = addListingButton.backgroundColor?.cgColor
-            skipButton.layer.borderWidth = 1.0
-            skipButton.layer.cornerRadius = 8 // Match other buttons
-        }
+        let imageID = UUID().uuidString
+        let storageRef = Storage.storage().reference()
+            .child("ticket_images")
+            .child("\(imageID).jpg")
         
-        // MARK: - Firebase Functions
-
-        /// Placeholder for the actual image upload to Firebase Storage
-        private func uploadImageAndGetURL(image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
-            // ⚠️ IMPLEMENTATION NOTE:
-            // 1. Convert the UIImage to Data (e.g., JPEG or PNG data).
-            // 2. Upload the data to Firebase Storage (e.g., in a "ticket_images" folder).
-            // 3. Get the download URL after the upload succeeds.
-            
-            print("--- Placeholder: Image upload function called. ---")
-            
-            // For demonstration, we'll simulate a successful upload with a dummy URL after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                let dummyURL = "gs://your-firebase-bucket/images/ticket_\(UUID().uuidString).jpg"
-                print("--- Placeholder: Image upload successful. URL: \(dummyURL) ---")
-                completion(.success(dummyURL))
-            }
-        }
+        let metadata = StorageMetadata()
+        metadata.contentType = "image/jpeg"
         
-        /// Saves the complete ticket listing data to Firestore
-        private func saveListingToFirestore(imageURL: String, name: String, date: String, time: String, seats: String) {
-            // Ensure the user is logged in to associate the listing with a seller
-            guard let sellerUID = Auth.auth().currentUser?.uid else {
-                print("Error: User not authenticated. Cannot create listing.")
-                // You should show an alert to the user here.
-                return
-            }
-            
-            let listingData: [String: Any] = [
-                "eventName": name,
-                "eventDate": date,
-                "eventTime": time,
-                "seatDetails": seats,
-                "imageURL": imageURL,
-                "sellerID": sellerUID,
-                "createdAt": FieldValue.serverTimestamp(), // Firestore timestamp for ordering
-                "isSold": false
-            ]
-
-            // Add a new document to the "listings" collection
-            db.collection("listings").addDocument(data: listingData) { [weak self] error in
-                if let error = error {
-                    print("Error adding document: \(error.localizedDescription)")
-                    // Show an error alert
-                } else {
-                    print("Listing created successfully in Firestore.")
-                    // Navigate to a success screen or home
-                    self?.navigateToSuccessScreen()
+        storageRef.putData(imageData, metadata: metadata) { metadata, error in
+            if let error = error { DispatchQueue.main.async { completion(.failure(error)) }; return }
+            storageRef.downloadURL { url, error in
+                if let error = error { DispatchQueue.main.async { completion(.failure(error)) }; return }
+                guard let downloadURL = url?.absoluteString else {
+                    DispatchQueue.main.async { completion(.failure(NSError(domain: "URLFetchError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to retrieve download URL."]))) }
+                    return
                 }
+                DispatchQueue.main.async { completion(.success(downloadURL)) }
             }
-        }
-
-        // MARK: - Actions (IBActions)
-        @IBAction func addListingTapped(_ sender: UIButton) {
-            // Basic input validation
-            guard let name = eventNameTextField.text, !name.isEmpty,
-                  let date = eventDateDisplay.text, !date.isEmpty,
-                  let time = eventTimeDisplay.text, !time.isEmpty,
-                  let seats = seatDetailsTextField.text, !seats.isEmpty else {
-                print("Please fill in all required listing details.")
-                // Show an alert to the user
-                return
-            }
-            
-            guard let image = selectedTicketImage else {
-                print("Please upload a ticket image before listing.")
-                // Show an alert to the user
-                return
-            }
-            
-            // 1. Start the image upload process
-            addListingButton.isEnabled = false // Disable button during upload/save
-            addListingButton.setTitle("Uploading...", for: .normal)
-            
-            uploadImageAndGetURL(image: image) { [weak self] result in
-                DispatchQueue.main.async {
-                    self?.addListingButton.isEnabled = true
-                    self?.addListingButton.setTitle("Add Listing", for: .normal)
-                    
-                    switch result {
-                    case .success(let url):
-                        // 2. Image uploaded, now save the listing data to Firestore
-                        self?.saveListingToFirestore(imageURL: url, name: name, date: date, time: time, seats: seats)
-                    case .failure(let error):
-                        print("Image upload failed: \(error.localizedDescription)")
-                        // Show an error alert
-                    }
-                }
-            }
-        }
-        
-        @IBAction func skipForNowTapped(_ sender: UIButton) {
-            // Navigate to the main app screen without creating a listing
-            navigateToSuccessScreen() // Assuming this is the main screen
-        }
-        
-        // MARK: - Image Picker Logic
-        @objc func uploadTicketImageTapped() {
-            let picker = UIImagePickerController()
-            picker.delegate = self
-            picker.sourceType = .photoLibrary
-            present(picker, animated: true)
-        }
-        
-        // UIImagePickerControllerDelegate method
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            picker.dismiss(animated: true, completion: nil)
-            
-            guard let image = info[.originalImage] as? UIImage else { return }
-            
-            // Store the selected image temporarily
-            selectedTicketImage = image
-            print("Ticket image selected and stored locally.")
-            
-            // 1. Display the image (If uploadImageArea is an UIImageView, set its image property here)
-            // 2. The actual Firebase Storage upload happens in addListingTapped
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            picker.dismiss(animated: true)
-        }
-        
-        // MARK: - Navigation
-        private func navigateToSuccessScreen() {
-            // Implement Storyboard Segue or programmatic navigation here
-            print("Navigating to main Ticket Listing Screen...")
         }
     }
+    
+    // MARK: - Firestore Save
+    
+    private func saveListingToFirestore(imageURL: String,
+                                      name: String,
+                                      date: String,
+                                      time: String,
+                                      // ⭐️ UPDATED: Added price argument
+                                      price: String,
+                                      seats: String) {
+        
+        guard let sellerUID = Auth.auth().currentUser?.uid else {
+            showAlert(title: "Error", message: "You must be logged in to create a listing.")
+            return
+        }
+        
+        let listingData: [String: Any] = [
+            "eventName": name,
+            "eventDate": date,
+            "eventTime": time,
+            "price": price,
+            "seatDetails": seats,
+            "imageURL": imageURL,
+            "sellerID": sellerUID,
+            "createdAt": FieldValue.serverTimestamp(),
+            "isSold": false
+        ]
+        
+        db.collection(listingCollectionName).addDocument(data: listingData) { [weak self] error in
+            if let error = error {
+                print("Error adding document: \(error.localizedDescription)")
+                self?.showAlert(title: "Error", message: "Unable to upload the listing.")
+            } else {
+                print("🎉 Listing created successfully. Returning to dashboard.")
+                self?.navigateToSuccessScreen()
+            }
+        }
+    }
+    
+    
+    // MARK: - Add Listing
+    
+    @IBAction func addListingTapped(_ sender: UIButton) {
+        
+        // ⭐️ UPDATED: Added price validation
+        guard let name = eventNameTextField.text, !name.isEmpty,
+              let date = eventDateDisplay.text, !date.isEmpty,
+              let time = eventTimeDisplay.text, !time.isEmpty,
+              let price = priceTextField.text, !price.isEmpty, // ⭐️ ADDED: Price validation
+              let seats = seatDetailsTextField.text, !seats.isEmpty else {
+            showAlert(title: "Missing Information", message: "Please complete all fields.")
+            return
+        }
+        
+        guard let image = selectedTicketImage else {
+            showAlert(title: "No Image", message: "Please upload a ticket image.")
+            return
+        }
+        
+        addListingButton.isEnabled = false
+        addListingButton.setTitle("Uploading...", for: .normal)
+        
+        uploadImageAndGetURL(image: image) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.addListingButton.isEnabled = true
+                self?.addListingButton.setTitle("Add Listing", for: .normal)
+                
+                switch result {
+                    case .success(let url):
+                        self?.saveListingToFirestore(imageURL: url,
+                                                    name: name,
+                                                    date: date,
+                                                    time: time,
+                                                    // ⭐️ UPDATED: Passed price argument
+                                                    price: price,
+                                                    seats: seats)
+                    case .failure(let error):
+                        print("Image upload failed: \(error.localizedDescription)")
+                        self?.showAlert(title: "Upload Failed",
+                                        message: "Unable to upload image. Try again.")
+                }
+            }
+        }
+    }
+    
+    
+    @IBAction func skipForNowTapped(_ sender: UIButton) {
+        navigateToSuccessScreen()
+    }
+    
+    
+    // MARK: - Image Picker (No change needed)
+    
+    @objc func uploadTicketImageTapped() {
+        let picker = UIImagePickerController()
+        picker.delegate = self
+        picker.sourceType = .photoLibrary
+        present(picker, animated: true)
+    }
+    
+    
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        picker.dismiss(animated: true, completion: nil)
+        
+        guard let image = info[.originalImage] as? UIImage else { return }
+        
+        selectedTicketImage = image
+        uploadImageArea.image = image
+        
+        print("📸 Ticket image selected.")
+    }
+    
+    
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+    }
+    
+    
+    // MARK: - Navigation (No change needed)
+    
+    private func navigateToSuccessScreen() {
+        if self.navigationController != nil {
+            self.navigationController?.popViewController(animated: true)
+        } else {
+            self.dismiss(animated: true)
+        }
+    }
+    
+    
+    // MARK: - Alerts (No change needed)
+    
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+}

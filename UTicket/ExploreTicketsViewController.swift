@@ -1,74 +1,110 @@
 //
-//  ExploreTicketsViewController.swift
-//  UTicket
+//    ExploreTicketsViewController.swift
+//    UTicket
 //
-//  Created by Zaviyan Tharwani on 10/22/25.
-//
+//    Created by Zaviyan Tharwani on 10/22/25.
+//    Modified by Paarth Jamdagneya on 12/2/25.
 
 import UIKit
+import FirebaseFirestore // ⭐️ ADDED: Import Firestore
 
-class ExploreTicketsViewController: UIViewController {
+class ExploreTicketsViewController: BaseViewController {
     
     @IBOutlet weak var tableView: UITableView!
     private var listings: [TicketListing] = []
-
+    
+    // ⭐️ ADDED: Database reference
+    private let db = Firestore.firestore()
+    private let listingCollectionName = "ticketListings"
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Explore Tickets"
         view.backgroundColor = .systemBackground
+        
         tableView.dataSource = self
-                tableView.delegate = self
-                tableView.register(UITableViewCell.self, forCellReuseIdentifier: "ListingCell")
+        tableView.delegate = self
+        
+        // ⭐️ Register the Custom Cell class
+        tableView.register(ListingCell.self, forCellReuseIdentifier: "ListingCell")
+        
+        // Tell the table view to use self-sizing rows
+        tableView.rowHeight = UITableView.automaticDimension
+        // Provide an estimate to improve scroll performance
+        tableView.estimatedRowHeight = 150
+        
+        // ❌ REMOVED: tableView.reloadData() (It should happen after data is fetched)
+    }
 
-                // Dummy data
-                let sample = TicketListing(
-                    eventName: "Sam Houston vs Texas Longhorns",
-                    price: "$200",
-                    date: "6 Oct",
-                    time: "7 PM",
-                    location: "DKR Texas Memorial Stadium",
-                    seatInfo: "29 Section, 41 Row, 4,5 Seat • 2 Tickets",
-                    status: "Active",
-                    image: UIImage(named: "sample_ticket") ?? UIImage()
-                )
-                listings = [sample, sample, sample]
-
-                tableView.reloadData()
-            }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // ⭐️ CALL FETCH LOGIC: Fetches data every time the view appears.
+        fetchExploreListings()
+    }
+    
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "showTicketDetail",
-           let dest = segue.destination as? TicketDetailViewController,
-           let listing = sender as? TicketListing {
+            let dest = segue.destination as? TicketDetailViewController,
+            let listing = sender as? TicketListing {
             dest.listing = listing
         }
     }
-
+    
+    // ⭐️ ADDED: Firestore Fetch Method
+    func fetchExploreListings() {
+        db.collection(listingCollectionName).getDocuments { [weak self] snapshot, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("Error fetching explore documents: \(error)")
+                return
+            }
+            
+            guard let documents = snapshot?.documents else { return }
+            
+            // Decode documents into the listings array
+            self.listings = documents.compactMap { doc -> TicketListing? in
+                do {
+                    // Assuming TicketListing struct conforms to Codable/Decodable
+                    return try doc.data(as: TicketListing.self)
+                } catch {
+                    print("Error decoding document: \(error)")
+                    return nil
+                }
+            }
+            
+            // Reload the table on the main thread
+            DispatchQueue.main.async {
+                self.tableView.reloadData()
+            }
         }
+    }
+}
 
-        extension ExploreTicketsViewController: UITableViewDataSource, UITableViewDelegate {
-            func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-                listings.count
-            }
+// MARK: - UITableViewDataSource, UITableViewDelegate
 
-            func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-                let listing = listings[indexPath.row]
-                let cell = tableView.dequeueReusableCell(withIdentifier: "ListingCell", for: indexPath)
-
-                var content = cell.defaultContentConfiguration()
-                content.image = listing.image
-                content.text = listing.eventName
-                content.secondaryText = "\(listing.price)\n\(listing.date), \(listing.time)\n\(listing.location)\n\(listing.seatInfo)"
-                content.secondaryTextProperties.numberOfLines = 4
-                cell.contentConfiguration = content
-                cell.accessoryType = .disclosureIndicator
-                return cell
-            }
-            func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-                tableView.deselectRow(at: indexPath, animated: true)
-                performSegue(withIdentifier: "showTicketDetail", sender: listings[indexPath.row])
-            }
-
+extension ExploreTicketsViewController: UITableViewDataSource, UITableViewDelegate {
+    
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return listings.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let listing = listings[indexPath.row]
+        
+        // ⭐️ Dequeue the custom ListingCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: "ListingCell", for: indexPath) as? ListingCell else {
+            return UITableViewCell()
         }
         
- 
-
+        cell.configure(with: listing, mode:.buyerWishlist)
+        
+        return cell
+    }
+    
+    // Handles the tap and performs the segue
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        performSegue(withIdentifier: "showTicketDetail", sender: listings[indexPath.row])
+    }
+}

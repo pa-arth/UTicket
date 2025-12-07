@@ -6,13 +6,29 @@
 //
 
 import UIKit
-struct TicketListing: Hashable {
+import FirebaseFirestore
+
+struct TicketListing: Hashable, Codable {
     let eventName: String
     let price: String
-    let date: String
-    let time: String
-    let location: String
-    let seatInfo: String
-    let status: String
-    let image: UIImage
+    let eventDate: String?
+    let eventTime: String
+    let seatDetails: String
+    let imageURL: String
+    let sellerID: String
+    let createdAt: Timestamp?
+    let isSold: Bool
+    
+    // CodingKeys to map Firestore field names to struct properties
+    enum CodingKeys: String, CodingKey {
+        case eventName
+        case price
+        case eventDate
+        case eventTime
+        case seatDetails
+        case imageURL
+        case sellerID
+        case createdAt
+        case isSold
+    }
 }

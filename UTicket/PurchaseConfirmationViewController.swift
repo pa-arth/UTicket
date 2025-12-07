@@ -7,7 +7,7 @@
 
 import UIKit
 
-class PurchaseConfirmationViewController: UIViewController {
+class PurchaseConfirmationViewController: BaseViewController {
     var listing: TicketListing?
     @IBOutlet weak var titleLabel: UILabel!
     @IBOutlet weak var detailsLabel: UILabel!
@@ -18,7 +18,8 @@ class PurchaseConfirmationViewController: UIViewController {
 
         if let l = listing {
             titleLabel?.text = "Approved & Purchased ✅\n\(l.eventName)"
-            detailsLabel?.text = "\(l.price)\n\(l.date), \(l.time)\n\(l.location)\n\(l.seatInfo)"
+            let dateTime = l.eventDate != nil ? "\(l.eventDate ?? ""), \(l.eventTime)" : l.eventTime
+            detailsLabel?.text = "\(l.price)\n\(dateTime)\n\(l.seatDetails)"
         }
     }
     
