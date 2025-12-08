@@ -128,24 +128,40 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
                 return
             }
             
-            // --- STEP 2: Handle Image Upload or Proceed Directly ---
-            if let imageToUpload = self.selectedImage {
-                
-                // Image exists, upload it first
-                self.uploadProfilePictureToStorage(image: imageToUpload, uid: uid) { result in
-                    switch result {
-                    case .success(let url):
-                        // Image uploaded, now save Firestore data WITH the URL
-                        self.saveProfileDataToFirestore(uid: uid, fullName: fullName, phone: phone, email: email, profileImageUrl: url.absoluteString)
-                    case .failure(let error):
-                        print("Failed to upload image: \(error.localizedDescription). Saving profile without photo URL.")
-                        // Fallback: Save profile data without the image URL
-                        self.saveProfileDataToFirestore(uid: uid, fullName: fullName, phone: phone, email: email, profileImageUrl: nil)
-                    }
+            // --- STEP 2: Upload Profile Picture (Required) ---
+            // Profile picture is required, so this should always exist due to validation
+            guard let imageToUpload = self.selectedImage else {
+                print("Error: Profile picture is required but was not found.")
+                self.showAlert(title: "Error", message: "Profile picture is required. Please try again.")
+                // Delete the user account since we can't complete profile creation
+                authResult?.user.delete { _ in }
+                return
+            }
+            
+            // Update display name in Firebase Auth
+            let changeRequest = authResult?.user.createProfileChangeRequest()
+            changeRequest?.displayName = fullName
+            changeRequest?.commitChanges { error in
+                if let error = error {
+                    print("Error updating display name: \(error.localizedDescription)")
+                    // Continue anyway, display name update is not critical
                 }
-            } else {
-                // No image selected, proceed to save Firestore data without URL
-                self.saveProfileDataToFirestore(uid: uid, fullName: fullName, phone: phone, email: email, profileImageUrl: nil)
+            }
+            
+            // Upload the image
+            self.uploadProfilePictureToStorage(image: imageToUpload, uid: uid) { result in
+                switch result {
+                case .success(let url):
+                    // Image uploaded, now save Firestore data WITH the URL
+                    self.saveProfileDataToFirestore(uid: uid, fullName: fullName, phone: phone, email: email, profileImageUrl: url.absoluteString)
+                case .failure(let error):
+                    print("Failed to upload image: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        self.showAlert(title: "Upload Failed", message: "Failed to upload profile picture: \(error.localizedDescription). Please try again.")
+                    }
+                    // Delete the user account since profile creation failed
+                    authResult?.user.delete { _ in }
+                }
             }
         }
     }
@@ -165,43 +181,135 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
         }
         
         // Write data to Firestore at "users/{uid}"
-        self.db.collection("users").document(uid).setData(profileData, merge: true) { dbError in
-            if let dbError = dbError {
-                print("Error saving profile data: \(dbError.localizedDescription)")
-                self.showAlert(title: "Profile Save Error", message: "Failed to save profile data.")
-            } else {
-                print("Profile data successfully saved for user: \(uid)")
+        self.db.collection("users").document(uid).setData(profileData, merge: true) { [weak self] dbError in
+            guard let self = self else { return }
+            
+            DispatchQueue.main.async {
+                if let dbError = dbError {
+                    print("Error saving profile data: \(dbError.localizedDescription)")
+                    self.showAlert(title: "Profile Save Error", message: "Failed to save profile data: \(dbError.localizedDescription)")
+                } else {
+                    print("Profile data successfully saved for user: \(uid)")
+                    // Navigate to the appropriate screen after successful profile creation
+                    self.navigateAfterProfileCreation()
+                }
             }
         }
+    }
+    
+    // Navigate to the appropriate screen after profile creation
+    private func navigateAfterProfileCreation() {
+        // Check if there's a navigation controller
+        if let navigationController = self.navigationController {
+            // Pop back to the previous screen (likely OnboardingViewController)
+            navigationController.popViewController(animated: true)
+        } else {
+            // If no navigation controller, try to navigate to the main app screen
+            let storyboard = UIStoryboard(name: "Main", bundle: nil)
+            if let exploreVC = storyboard.instantiateViewController(withIdentifier: "ExploreVC") as? UIViewController {
+                // Present modally or set as root
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let window = windowScene.windows.first {
+                    let navController = UINavigationController(rootViewController: exploreVC)
+                    window.rootViewController = navController
+                    window.makeKeyAndVisible()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Validation Functions
+    
+    private func validatePassword(_ password: String) -> (isValid: Bool, errorMessage: String?) {
+        // Check minimum length
+        if password.count < 6 {
+            return (false, "Password must be at least 6 characters long.")
+        }
+        
+        // Additional validations can be added here (e.g., uppercase, lowercase, numbers, special chars)
+        // For now, just check length
+        
+        return (true, nil)
+    }
+    
+    private func validateEmail(_ email: String) -> (isValid: Bool, errorMessage: String?) {
+        // Basic email format validation
+        let emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
+        let emailPredicate = NSPredicate(format:"SELF MATCHES %@", emailRegex)
+        
+        if !emailPredicate.evaluate(with: email) {
+            return (false, "Please enter a valid email address.")
+        }
+        
+        return (true, nil)
+    }
+    
+    private func validatePhone(_ phone: String) -> (isValid: Bool, errorMessage: String?) {
+        // Remove common phone formatting characters for validation
+        let cleanedPhone = phone.replacingOccurrences(of: "[^0-9]", with: "", options: .regularExpression)
+        
+        // Check if phone has at least 10 digits (US phone number format)
+        if cleanedPhone.count < 10 {
+            return (false, "Please enter a valid phone number.")
+        }
+        
+        return (true, nil)
     }
     
     // MARK: - Actions (IBActions)
     @IBAction func createProfileButtonTapped(_ sender: UIButton) {
         
         // 1. Validate all required fields
-        guard let email = emailDisplayTextField.text, !email.isEmpty,
+        guard let email = emailDisplayTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty,
               let password = passwordTextField.text, !password.isEmpty,
               let confirmPassword = confirmPasswordTextField.text, !confirmPassword.isEmpty,
-              let fullName = fullNameTextField.text, !fullName.isEmpty,
-              let phone = phoneTextField.text, !phone.isEmpty else {
+              let fullName = fullNameTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !fullName.isEmpty,
+              let phone = phoneTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !phone.isEmpty else {
             
             showAlert(title: "Missing Fields", message: "Please fill in all required fields.")
             return
         }
         
-        // 2. Check if passwords match
-        guard password == confirmPassword else {
-            showAlert(title: "Password Mismatch", message: "Passwords do not match.")
+        // 2. Validate profile picture is selected
+        guard selectedImage != nil else {
+            showAlert(title: "Profile Picture Required", message: "Please select a profile picture before creating your account.")
             return
         }
         
-        // 🔑 3. Check for UTEXAS Domain (Client-Side)
+        // 3. Validate email format
+        let emailValidation = validateEmail(email)
+        if !emailValidation.isValid {
+            showAlert(title: "Invalid Email", message: emailValidation.errorMessage ?? "Please enter a valid email address.")
+            return
+        }
+        
+        // 🔑 4. Check for UTEXAS Domain (Client-Side)
         if !isAllowedDomain(email: email) {
             showAlert(title: "Invalid Email Domain", message: "Sign-up is restricted to email addresses ending with \(allowedDomain).")
             return
         }
         
-        // 4. Perform Sign Up and Data Save
+        // 5. Validate password
+        let passwordValidation = validatePassword(password)
+        if !passwordValidation.isValid {
+            showAlert(title: "Invalid Password", message: passwordValidation.errorMessage ?? "Password does not meet requirements.")
+            return
+        }
+        
+        // 6. Check if passwords match
+        guard password == confirmPassword else {
+            showAlert(title: "Password Mismatch", message: "Passwords do not match.")
+            return
+        }
+        
+        // 7. Validate phone number
+        let phoneValidation = validatePhone(phone)
+        if !phoneValidation.isValid {
+            showAlert(title: "Invalid Phone Number", message: phoneValidation.errorMessage ?? "Please enter a valid phone number.")
+            return
+        }
+        
+        // 8. Perform Sign Up and Data Save
         signUpAndSaveProfile(email: email, password: password, fullName: fullName, phone: phone)
     }
     

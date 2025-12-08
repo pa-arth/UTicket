@@ -100,6 +100,24 @@ class ListingCell: UITableViewCell {
         return label
     }()
     
+    let heartButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "heart"), for: .normal)
+        button.setImage(UIImage(systemName: "heart.fill"), for: .selected)
+        button.tintColor = .systemRed
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
+    
+    // Closure to handle heart button tap
+    var onHeartTapped: ((Bool) -> Void)?
+    private var currentListing: TicketListing?
+    private var isInWishlist: Bool = false {
+        didSet {
+            heartButton.isSelected = isInWishlist
+        }
+    }
+    
     // MARK: - Init
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -123,6 +141,9 @@ class ListingCell: UITableViewCell {
         contentView.addSubview(seatImageView)
         contentView.addSubview(seatLabel)
         contentView.addSubview(statusLabel)
+        contentView.addSubview(heartButton)
+        
+        heartButton.addTarget(self, action: #selector(heartButtonTapped), for: .touchUpInside)
         
         // MARK: - Constraints
         NSLayoutConstraint.activate([
@@ -165,13 +186,54 @@ class ListingCell: UITableViewCell {
             
             statusLabel.topAnchor.constraint(equalTo: seatLabel.bottomAnchor, constant: 6),
             statusLabel.leadingAnchor.constraint(equalTo: eventNameLabel.leadingAnchor),
-            statusLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12)
+            statusLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -12),
+            
+            heartButton.topAnchor.constraint(equalTo: ticketImageView.topAnchor),
+            heartButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
+            heartButton.widthAnchor.constraint(equalToConstant: 30),
+            heartButton.heightAnchor.constraint(equalToConstant: 30)
         ])
+    }
+    
+    @objc private func heartButtonTapped() {
+        // Navigate to wishlist view controller
+        navigateToWishlist()
+        
+        // Still call the closure for any additional handling (like updating wishlist state)
+        isInWishlist.toggle()
+        onHeartTapped?(isInWishlist)
+    }
+    
+    // Helper method to find the view controller containing this cell
+    private func findViewController() -> UIViewController? {
+        var responder: UIResponder? = self
+        while responder != nil {
+            responder = responder?.next
+            if let viewController = responder as? UIViewController {
+                return viewController
+            }
+        }
+        return nil
+    }
+    
+    // Navigate to wishlist view controller
+    private func navigateToWishlist() {
+        guard let viewController = findViewController() else {
+            print("Could not find view controller for navigation")
+            return
+        }
+        
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        if let wishlistVC = storyboard.instantiateViewController(withIdentifier: "wishlist") as? UIViewController {
+            viewController.navigationController?.pushViewController(wishlistVC, animated: true)
+        }
     }
     
     // MARK: - Configure Cell
     // ⭐️ UPDATED: Removed ticketImage parameter
-    func configure(with listing: TicketListing, mode: ListingCellMode) {
+    func configure(with listing: TicketListing, mode: ListingCellMode, isInWishlist: Bool = false) {
+        currentListing = listing
+        
         //    1. Set your text labels
         eventNameLabel.text = listing.eventName
         priceLabel.text = listing.price
@@ -184,17 +246,20 @@ class ListingCell: UITableViewCell {
         //    2. ⭐️ Fetch image using the shared ImageLoader
         //    This replaces the need for the `ticketImage` parameter.
         ImageLoader.shared.loadImage(into: ticketImageView, from: listing.imageURL)
+        
         switch mode {
-                    case .buyerWishlist:
-                        //    For the buyer, maybe we hide the detailed status and show a 'heart' icon.
-                        statusLabel.isHidden = true
-                        //    Example: self.heartImageView.isHidden = false
-                        
-                    case .sellerMyTickets:
-                        //    For the seller, we show the status label based on isSold.
-                        statusLabel.isHidden = false
-                        statusLabel.text = listing.isSold ? "Sold" : "Available"
-                        statusLabel.textColor = listing.isSold ? .systemRed : .systemGreen
-                }
+        case .buyerWishlist:
+            //    For the buyer, hide the detailed status and show a 'heart' icon.
+            statusLabel.isHidden = true
+            heartButton.isHidden = false
+            self.isInWishlist = isInWishlist
+            
+        case .sellerMyTickets:
+            //    For the seller, we show the status label based on isSold.
+            statusLabel.isHidden = false
+            statusLabel.text = listing.isSold ? "Sold" : "Available"
+            statusLabel.textColor = listing.isSold ? .systemRed : .systemGreen
+            heartButton.isHidden = true
+        }
     }
 }

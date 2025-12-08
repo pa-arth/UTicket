@@ -7,8 +7,13 @@
 
 import UIKit
 import Kingfisher
+import FirebaseFirestore
+import FirebaseAuth
+import SafariServices
 
 class TicketDetailViewController: BaseViewController {
+    
+    private let db = Firestore.firestore()
     
     // MARK: - Core Listing Outlets
     @IBOutlet weak var ticketImageView: UIImageView!
@@ -69,17 +74,63 @@ class TicketDetailViewController: BaseViewController {
         
     }
 
-    // MARK: - Navigation
-    
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        if segue.identifier == "showPurchaseConfirmation",
-            let dest = segue.destination as? PurchaseConfirmationViewController,
-            let passed = sender as? TicketListing {
-            dest.listing = passed
+    @IBAction func initiatePurchaseTapped(_ sender: Any) {
+        guard let listing = listing,
+              let buyerId = Auth.auth().currentUser?.uid else {
+            return
+        }
+        
+        // Find the listing document ID
+        findListingDocumentId(listing: listing) { [weak self] listingId in
+            if let listingId = listingId {
+                // Create purchase interest notification for seller
+                NotificationManager.shared.createPurchaseInterestNotification(
+                    listingId: listingId,
+                    listingName: listing.eventName,
+                    sellerId: listing.sellerID,
+                    buyerId: buyerId
+                )
+            }
+            
+            // Open Stripe payment link
+            DispatchQueue.main.async {
+                self?.openStripePaymentLink()
+            }
         }
     }
-
-    @IBAction func initiatePurchaseTapped(_ sender: Any) {
-        performSegue(withIdentifier: "showPurchaseConfirmation", sender: listing)
+    
+    private func openStripePaymentLink() {
+        guard let url = URL(string: "https://buy.stripe.com/8x7sM02u7zD7bv6Lifbq00") else {
+            print("Invalid Stripe URL")
+            return
+        }
+        
+        let safariVC = SFSafariViewController(url: url)
+        present(safariVC, animated: true)
+    }
+    
+    private func findListingDocumentId(listing: TicketListing, completion: @escaping (String?) -> Void) {
+        db.collection("ticketListings")
+            .whereField("sellerID", isEqualTo: listing.sellerID)
+            .whereField("eventName", isEqualTo: listing.eventName)
+            .whereField("price", isEqualTo: listing.price)
+            .whereField("seatDetails", isEqualTo: listing.seatDetails)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("Error finding listing ID: \(error)")
+                    completion(nil)
+                    return
+                }
+                
+                guard let document = snapshot?.documents.first else {
+                    print("Listing not found")
+                    completion(nil)
+                    return
+                }
+                
+                completion(document.documentID)
+            }
     }
 }
+

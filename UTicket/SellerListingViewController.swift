@@ -99,13 +99,27 @@ class SellerListingViewController: BaseViewController, UIImagePickerControllerDe
             "isSold": false
         ]
         
-        db.collection(listingCollectionName).addDocument(data: listingData) { [weak self] error in
+        let docRef = db.collection(listingCollectionName).document()
+        let listingId = docRef.documentID
+        
+        docRef.setData(listingData) { [weak self] error in
             if let error = error {
                 print("Error adding document: \(error.localizedDescription)")
                 self?.showAlert(title: "Error", message: "Unable to upload the listing.")
             } else {
                 print("🎉 Listing created successfully. Returning to dashboard.")
-                self?.navigateToSuccessScreen()
+                
+                // Create notifications for other users
+                NotificationManager.shared.createNewListingNotification(
+                    listingId: listingId,
+                    listingName: name,
+                    sellerId: sellerUID
+                )
+                
+                // Show success pop-up
+                self?.showListingCreatedSuccessPopup(listingName: name) {
+                    self?.navigateToSuccessScreen()
+                }
             }
         }
     }
@@ -201,11 +215,27 @@ class SellerListingViewController: BaseViewController, UIImagePickerControllerDe
     }
     
     
-    // MARK: - Alerts (No change needed)
+    // MARK: - Alerts
     
     private func showAlert(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
     }
+    
+    private func showListingCreatedSuccessPopup(listingName: String, completion: @escaping () -> Void) {
+        let alert = UIAlertController(
+            title: "Listing Created! 🎉",
+            message: "Your listing for \"\(listingName)\" has been successfully created and is now visible to buyers.",
+            preferredStyle: .alert
+        )
+        
+        let okAction = UIAlertAction(title: "Great!", style: .default) { _ in
+            completion()
+        }
+        
+        alert.addAction(okAction)
+        present(alert, animated: true)
+    }
+    
 }

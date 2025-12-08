@@ -7,15 +7,19 @@
 
 import UIKit
 import FirebaseFirestore // ⭐️ ADDED: Import Firestore
+import FirebaseAuth
 
 class ExploreTicketsViewController: BaseViewController {
     
     @IBOutlet weak var tableView: UITableView!
     private var listings: [TicketListing] = []
+    private var listingDocumentIDs: [String] = [] // Store document IDs for wishlist operations
+    private var wishlistListingIDs: Set<String> = [] // Track which listings are in wishlist
     
     // ⭐️ ADDED: Database reference
     private let db = Firestore.firestore()
     private let listingCollectionName = "ticketListings"
+    private let wishlistCollectionName = "wishlists"
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -40,6 +44,7 @@ class ExploreTicketsViewController: BaseViewController {
         super.viewWillAppear(animated)
         // ⭐️ CALL FETCH LOGIC: Fetches data every time the view appears.
         fetchExploreListings()
+        fetchWishlistStatus()
     }
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
@@ -62,10 +67,10 @@ class ExploreTicketsViewController: BaseViewController {
             
             guard let documents = snapshot?.documents else { return }
             
-            // Decode documents into the listings array
+            // Store document IDs and decode listings
+            self.listingDocumentIDs = documents.map { $0.documentID }
             self.listings = documents.compactMap { doc -> TicketListing? in
                 do {
-                    // Assuming TicketListing struct conforms to Codable/Decodable
                     return try doc.data(as: TicketListing.self)
                 } catch {
                     print("Error decoding document: \(error)")
@@ -77,6 +82,86 @@ class ExploreTicketsViewController: BaseViewController {
             DispatchQueue.main.async {
                 self.tableView.reloadData()
             }
+        }
+    }
+    
+    // MARK: - Wishlist Methods
+    
+    func fetchWishlistStatus() {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            return
+        }
+        
+        db.collection(wishlistCollectionName)
+            .whereField("userId", isEqualTo: userId)
+            .getDocuments { [weak self] snapshot, error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("Error fetching wishlist: \(error)")
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else { return }
+                
+                // Extract listing IDs from wishlist documents
+                self.wishlistListingIDs = Set(documents.compactMap { doc -> String? in
+                    return doc.data()["listingId"] as? String
+                })
+                
+                DispatchQueue.main.async {
+                    self.tableView.reloadData()
+                }
+            }
+    }
+    
+    func toggleWishlist(listingId: String, isAdding: Bool) {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("User not logged in")
+            return
+        }
+        
+        if isAdding {
+            // Add to wishlist
+            let wishlistData: [String: Any] = [
+                "userId": userId,
+                "listingId": listingId,
+                "createdAt": FieldValue.serverTimestamp()
+            ]
+            
+            db.collection(wishlistCollectionName).addDocument(data: wishlistData) { [weak self] error in
+                if let error = error {
+                    print("Error adding to wishlist: \(error)")
+                } else {
+                    self?.wishlistListingIDs.insert(listingId)
+                    print("Added to wishlist")
+                }
+            }
+        } else {
+            // Remove from wishlist
+            db.collection(wishlistCollectionName)
+                .whereField("userId", isEqualTo: userId)
+                .whereField("listingId", isEqualTo: listingId)
+                .getDocuments { [weak self] snapshot, error in
+                    guard let self = self else { return }
+                    
+                    if let error = error {
+                        print("Error finding wishlist item: \(error)")
+                        return
+                    }
+                    
+                    // Delete all matching documents (should only be one)
+                    for document in snapshot?.documents ?? [] {
+                        document.reference.delete { error in
+                            if let error = error {
+                                print("Error removing from wishlist: \(error)")
+                            } else {
+                                self.wishlistListingIDs.remove(listingId)
+                                print("Removed from wishlist")
+                            }
+                        }
+                    }
+                }
         }
     }
 }
@@ -91,13 +176,20 @@ extension ExploreTicketsViewController: UITableViewDataSource, UITableViewDelega
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let listing = listings[indexPath.row]
+        let listingId = listingDocumentIDs[indexPath.row]
+        let isInWishlist = wishlistListingIDs.contains(listingId)
         
         // ⭐️ Dequeue the custom ListingCell
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "ListingCell", for: indexPath) as? ListingCell else {
             return UITableViewCell()
         }
         
-        cell.configure(with: listing, mode:.buyerWishlist)
+        cell.configure(with: listing, mode: .buyerWishlist, isInWishlist: isInWishlist)
+        
+        // Set up heart button tap handler
+        cell.onHeartTapped = { [weak self] isAdding in
+            self?.toggleWishlist(listingId: listingId, isAdding: isAdding)
+        }
         
         return cell
     }

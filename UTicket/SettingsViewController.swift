@@ -16,6 +16,8 @@ class SettingsViewController: UIViewController, UIImagePickerControllerDelegate,
     // MARK: - UI Outlets
     @IBOutlet weak var profileImageView: UIImageView!
     @IBOutlet weak var usernameLabel: UILabel!
+    @IBOutlet weak var notificationSwitch: UISwitch!
+    
     
     // MARK: - Properties
     private let storage = Storage.storage()
@@ -29,6 +31,8 @@ class SettingsViewController: UIViewController, UIImagePickerControllerDelegate,
         
         setupProfileImageTapGesture()
         fetchUserProfile()
+        loadNotificationPreference()
+        setupNotificationSwitch()
     }
     
     override func viewDidLayoutSubviews() {
@@ -211,21 +215,42 @@ class SettingsViewController: UIViewController, UIImagePickerControllerDelegate,
     }
     
     private func updateProfileImageURL(url: String) {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
+        guard let uid = Auth.auth().currentUser?.uid,
+              let user = Auth.auth().currentUser else { 
+            showAlert(title: "Error", message: "User not authenticated. Please try again.")
+            return 
+        }
         
-        db.collection("users").document(uid).setData([
+        // Ensure user document exists with basic info, then update image URL
+        var userData: [String: Any] = [
             "profileImageUrl": url
-        ], merge: true) { [weak self] error in
+        ]
+        
+        // Add email and displayName if available to ensure document exists properly
+        if let email = user.email {
+            userData["email"] = email
+        }
+        if let displayName = user.displayName {
+            userData["fullName"] = displayName
+        }
+        
+        db.collection("users").document(uid).setData(userData, merge: true) { [weak self] error in
             guard let self = self else { return }
             
             if let error = error {
                 print("Error updating profile image URL: \(error.localizedDescription)")
-                self.showAlert(title: "Error", message: "Failed to save profile picture. Please try again.")
-                self.fetchUserProfile()
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Error", message: "Failed to save profile picture: \(error.localizedDescription)")
+                    self.fetchUserProfile()
+                }
             } else {
                 print("✅ Profile picture updated successfully")
                 // Clear Kingfisher cache for this image to force reload
                 KingfisherManager.shared.cache.removeImage(forKey: url)
+                // Show success message
+                DispatchQueue.main.async {
+                    self.showAlert(title: "Success", message: "Profile picture updated successfully!")
+                }
             }
         }
     }
@@ -371,5 +396,34 @@ class SettingsViewController: UIViewController, UIImagePickerControllerDelegate,
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+    
+    // MARK: - Notification Settings
+    
+    private func setupNotificationSwitch() {
+        notificationSwitch.addTarget(self, action: #selector(notificationSwitchToggled), for: .valueChanged)
+    }
+    
+    private func loadNotificationPreference() {
+        NotificationManager.shared.getNotificationPreference { [weak self] enabled in
+            DispatchQueue.main.async {
+                self?.notificationSwitch.isOn = enabled
+            }
+        }
+    }
+    
+    @objc private func notificationSwitchToggled() {
+        let isEnabled = notificationSwitch.isOn
+        NotificationManager.shared.setNotificationPreference(isEnabled) { [weak self] success in
+            DispatchQueue.main.async {
+                if success {
+                    print("Notification preference updated: \(isEnabled)")
+                } else {
+                    // Revert switch if save failed
+                    self?.notificationSwitch.isOn = !isEnabled
+                    self?.showAlert(title: "Error", message: "Failed to update notification preference. Please try again.")
+                }
+            }
+        }
     }
 }

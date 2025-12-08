@@ -16,6 +16,17 @@ class BaseViewController: UIViewController {
 		super.viewDidLoad()
 		setupProfileIcon()
 	}
+	
+	override func viewWillAppear(_ animated: Bool) {
+		super.viewWillAppear(animated)
+		startNotificationListener()
+	}
+	
+	override func viewWillDisappear(_ animated: Bool) {
+		super.viewWillDisappear(animated)
+		// Don't stop listener here - we want notifications across all screens
+		// Only stop when user logs out
+	}
 
 	func setupProfileIcon() {
 		// 1. Create a custom button
@@ -84,6 +95,22 @@ class BaseViewController: UIViewController {
 			
 			// 3. Push the settings screen onto the navigation stack
 			self.navigationController?.pushViewController(settingsVC, animated: true)
+		}
+	}
+	
+	// MARK: - Notification Listener
+	
+	private func startNotificationListener() {
+		// Only start if user is logged in
+		guard Auth.auth().currentUser != nil else {
+			return
+		}
+		
+		NotificationManager.shared.startListeningForNotifications { [weak self] notification, notificationId in
+			guard let self = self else { return }
+			
+			// Show banner notification
+			NotificationManager.shared.showBanner(for: notification, notificationId: notificationId, in: self)
 		}
 	}
 }

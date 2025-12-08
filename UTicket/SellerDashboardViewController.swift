@@ -117,11 +117,6 @@ class SellerDashboardViewController: BaseViewController, UITableViewDataSource, 
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        if let approveVC = storyboard.instantiateViewController(withIdentifier: "approveScreen") as? UIViewController {
-            self.navigationController?.pushViewController(approveVC, animated: true)
-        }
     }
     
 }
