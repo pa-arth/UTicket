@@ -37,7 +37,37 @@ class ExploreTicketsViewController: BaseViewController {
         // Provide an estimate to improve scroll performance
         tableView.estimatedRowHeight = 150
         
+        // Setup wishlist button action
+        setupWishlistButton()
+        
         // ❌ REMOVED: tableView.reloadData() (It should happen after data is fetched)
+    }
+    
+    // MARK: - Navigation Setup
+    
+    private func setupWishlistButton() {
+        // Set up the wishlist button action programmatically
+        // This works whether the button is set in storyboard or not
+        if let wishlistButton = navigationItem.leftBarButtonItem {
+            wishlistButton.target = self
+            wishlistButton.action = #selector(wishlistButtonTapped)
+        } else {
+            // If button doesn't exist, create it programmatically
+            let wishlistButton = UIBarButtonItem(title: "Wishlist", style: .plain, target: self, action: #selector(wishlistButtonTapped))
+            wishlistButton.tintColor = UIColor(red: 0.676, green: 0.333, blue: 0.034, alpha: 1.0)
+            navigationItem.leftBarButtonItem = wishlistButton
+        }
+    }
+    
+    @objc private func wishlistButtonTapped(_ sender: UIBarButtonItem) {
+        navigateToWishlist()
+    }
+    
+    private func navigateToWishlist() {
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        if let wishlistVC = storyboard.instantiateViewController(withIdentifier: "wishlist") as? WishlistViewController {
+            navigationController?.pushViewController(wishlistVC, animated: true)
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -115,9 +145,10 @@ class ExploreTicketsViewController: BaseViewController {
             }
     }
     
-    func toggleWishlist(listingId: String, isAdding: Bool) {
+    func toggleWishlist(listingId: String, isAdding: Bool, completion: @escaping (Bool) -> Void = { _ in }) {
         guard let userId = Auth.auth().currentUser?.uid else {
             print("User not logged in")
+            completion(false)
             return
         }
         
@@ -130,11 +161,17 @@ class ExploreTicketsViewController: BaseViewController {
             ]
             
             db.collection(wishlistCollectionName).addDocument(data: wishlistData) { [weak self] error in
-                if let error = error {
-                    print("Error adding to wishlist: \(error)")
-                } else {
-                    self?.wishlistListingIDs.insert(listingId)
-                    print("Added to wishlist")
+                DispatchQueue.main.async {
+                    if let error = error {
+                        print("Error adding to wishlist: \(error.localizedDescription)")
+                        completion(false)
+                    } else {
+                        self?.wishlistListingIDs.insert(listingId)
+                        print("✅ Added to wishlist: \(listingId)")
+                        // Reload table view to update heart icon state
+                        self?.tableView.reloadData()
+                        completion(true)
+                    }
                 }
             }
         } else {
@@ -143,22 +180,47 @@ class ExploreTicketsViewController: BaseViewController {
                 .whereField("userId", isEqualTo: userId)
                 .whereField("listingId", isEqualTo: listingId)
                 .getDocuments { [weak self] snapshot, error in
-                    guard let self = self else { return }
+                    guard let self = self else {
+                        completion(false)
+                        return
+                    }
                     
                     if let error = error {
-                        print("Error finding wishlist item: \(error)")
+                        print("Error finding wishlist item: \(error.localizedDescription)")
+                        completion(false)
+                        return
+                    }
+                    
+                    guard let documents = snapshot?.documents, !documents.isEmpty else {
+                        print("No wishlist item found to remove")
+                        completion(false)
                         return
                     }
                     
                     // Delete all matching documents (should only be one)
-                    for document in snapshot?.documents ?? [] {
+                    let dispatchGroup = DispatchGroup()
+                    var hasError = false
+                    
+                    for document in documents {
+                        dispatchGroup.enter()
                         document.reference.delete { error in
                             if let error = error {
-                                print("Error removing from wishlist: \(error)")
-                            } else {
-                                self.wishlistListingIDs.remove(listingId)
-                                print("Removed from wishlist")
+                                print("Error removing from wishlist: \(error.localizedDescription)")
+                                hasError = true
                             }
+                            dispatchGroup.leave()
+                        }
+                    }
+                    
+                    dispatchGroup.notify(queue: .main) {
+                        if !hasError {
+                            self.wishlistListingIDs.remove(listingId)
+                            print("✅ Removed from wishlist: \(listingId)")
+                            // Reload table view to update heart icon state
+                            self.tableView.reloadData()
+                            completion(true)
+                        } else {
+                            completion(false)
                         }
                     }
                 }
@@ -187,8 +249,23 @@ extension ExploreTicketsViewController: UITableViewDataSource, UITableViewDelega
         cell.configure(with: listing, mode: .buyerWishlist, isInWishlist: isInWishlist)
         
         // Set up heart button tap handler
-        cell.onHeartTapped = { [weak self] isAdding in
-            self?.toggleWishlist(listingId: listingId, isAdding: isAdding)
+        cell.onHeartTapped = { [weak self, weak cell] isAdding in
+            guard let self = self, let cell = cell else { return }
+            
+            // Store the current state in case we need to revert
+            let previousState = isInWishlist
+            
+            // Perform the wishlist operation
+            self.toggleWishlist(listingId: listingId, isAdding: isAdding) { success in
+                DispatchQueue.main.async {
+                    if !success {
+                        // Revert the cell state if operation failed
+                        // The cell's internal state was already toggled, so we revert it
+                        cell.configure(with: listing, mode: .buyerWishlist, isInWishlist: previousState)
+                    }
+                    // If successful, the table view will reload and update all cells
+                }
+            }
         }
         
         return cell

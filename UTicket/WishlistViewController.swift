@@ -12,10 +12,11 @@ class WishlistViewController: BaseViewController {
     @IBOutlet weak var tableView: UITableView!
     
     private var wishlistItems: [TicketListing] = []
+    private var wishlistListingIDs: [String] = [] // Store listing document IDs for efficient removal
     private let db = Firestore.firestore()
     private let wishlistCollectionName = "wishlists"
     private let listingCollectionName = "ticketListings"
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Wishlist"
@@ -93,6 +94,7 @@ class WishlistViewController: BaseViewController {
                 // Firestore doesn't support 'in' query with document IDs directly
                 // So we'll fetch each document individually
                 var fetchedListings: [TicketListing] = []
+                var fetchedListingIDs: [String] = []
                 let dispatchGroup = DispatchGroup()
                 
                 for listingId in listingIDs {
@@ -115,6 +117,7 @@ class WishlistViewController: BaseViewController {
                             do {
                                 if let listing = try? document.data(as: TicketListing.self) {
                                     fetchedListings.append(listing)
+                                    fetchedListingIDs.append(listingId)
                                 }
                             } catch {
                                 print("Error decoding listing \(listingId): \(error)")
@@ -124,23 +127,76 @@ class WishlistViewController: BaseViewController {
                 
                 dispatchGroup.notify(queue: .main) {
                     self.wishlistItems = fetchedListings
+                    self.wishlistListingIDs = fetchedListingIDs
                     self.tableView.reloadData()
                 }
             }
+    }
+    
+    // MARK: - Helper Methods
+    
+    private func removeFromWishlist(listingId: String) {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        // Remove from wishlist using the listing document ID
+        db.collection(wishlistCollectionName)
+            .whereField("userId", isEqualTo: userId)
+            .whereField("listingId", isEqualTo: listingId)
+            .getDocuments { [weak self] snapshot, error in
+                guard let self = self else { return }
+                
+                if let error = error {
+                    print("Error finding wishlist item: \(error)")
+                    return
+                }
+                
+                guard let documents = snapshot?.documents, !documents.isEmpty else {
+                    print("Wishlist item not found")
+                    return
+                }
+                
+                // Delete all matching documents (should only be one)
+                let dispatchGroup = DispatchGroup()
+                var hasError = false
+                
+                for document in documents {
+                    dispatchGroup.enter()
+                    document.reference.delete { error in
+                        if let error = error {
+                            print("Error removing from wishlist: \(error)")
+                            hasError = true
+                        }
+                        dispatchGroup.leave()
+                    }
+                }
+                
+                dispatchGroup.notify(queue: .main) {
+                    if !hasError {
+                        print("Removed from wishlist")
+                        // Refresh the wishlist
+                        self.fetchWishlistItems()
+                    }
+                }
             }
     }
-
+}
 
 // MARK: - UITableViewDataSource, UITableViewDelegate
 
 extension WishlistViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return wishlistItems.count
+        // Ensure arrays are in sync - use the minimum count to be safe
+        return min(wishlistItems.count, wishlistListingIDs.count)
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        guard indexPath.row < wishlistItems.count && indexPath.row < wishlistListingIDs.count else {
+            return UITableViewCell()
+        }
+        
         let listing = wishlistItems[indexPath.row]
+        let listingId = wishlistListingIDs[indexPath.row]
         
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "ListingCell", for: indexPath) as? ListingCell else {
             return UITableViewCell()
@@ -148,11 +204,11 @@ extension WishlistViewController: UITableViewDataSource, UITableViewDelegate {
         
         cell.configure(with: listing, mode: .buyerWishlist, isInWishlist: true)
         
-        // Disable heart button in wishlist view (or make it remove from wishlist)
+        // Heart button removes from wishlist
         cell.onHeartTapped = { [weak self] isAdding in
             if !isAdding {
-                // Remove from wishlist
-                self?.removeFromWishlist(listing: listing)
+                // Remove from wishlist using the stored listing ID
+                self?.removeFromWishlist(listingId: listingId)
             }
         }
         
@@ -162,59 +218,5 @@ extension WishlistViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         performSegue(withIdentifier: "showTicketDetailFromWishlist", sender: wishlistItems[indexPath.row])
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func removeFromWishlist(listing: TicketListing) {
-        guard let userId = Auth.auth().currentUser?.uid else { return }
-        
-        // We need to find the listing document ID
-        // Since we don't store it in TicketListing, we'll query for it
-        db.collection(listingCollectionName)
-            .whereField("sellerID", isEqualTo: listing.sellerID)
-            .whereField("eventName", isEqualTo: listing.eventName)
-            .whereField("price", isEqualTo: listing.price)
-            .limit(to: 1)
-            .getDocuments { [weak self] snapshot, error in
-                guard let self = self else { return }
-                
-                if let error = error {
-                    print("Error finding listing: \(error)")
-                    return
-                }
-                
-                guard let listingDoc = snapshot?.documents.first else {
-                    print("Listing not found")
-                    return
-                }
-                
-                let listingId = listingDoc.documentID
-                
-                // Remove from wishlist
-                self.db.collection(self.wishlistCollectionName)
-                    .whereField("userId", isEqualTo: userId)
-                    .whereField("listingId", isEqualTo: listingId)
-                    .getDocuments { snapshot, error in
-                        if let error = error {
-                            print("Error finding wishlist item: \(error)")
-                            return
-                        }
-                        
-                        for document in snapshot?.documents ?? [] {
-                            document.reference.delete { error in
-                                if let error = error {
-                                    print("Error removing from wishlist: \(error)")
-                                } else {
-                                    print("Removed from wishlist")
-                                    // Refresh the wishlist
-                                    DispatchQueue.main.async {
-                                        self.fetchWishlistItems()
-                                    }
-                                }
-                            }
-                        }
-                    }
-            }
     }
 }

@@ -17,13 +17,12 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
     private let storage = Storage.storage()
     var selectedImage: UIImage?
     
-    // 🔑 Allowed Domain for UT Austin
-    private let allowedDomain = "@utexas.edu"
+    // 🔑 Allowed Domains for UT Austin
+    private let allowedDomains = ["@utexas.edu", "@my.utexas.edu"]
     
     // MARK: - UI Connections (IBOutlets)
     @IBOutlet weak var profilePhotoArea: UIImageView!
     @IBOutlet weak var fullNameTextField: UITextField!
-    @IBOutlet weak var phoneTextField: UITextField!
     @IBOutlet weak var emailDisplayTextField: UITextField!
     @IBOutlet weak var passwordTextField: UITextField!
     @IBOutlet weak var confirmPasswordTextField: UITextField!
@@ -67,7 +66,8 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
     
     // 🔑 NEW: Helper function to check the required email domain
     private func isAllowedDomain(email: String) -> Bool {
-        return email.lowercased().hasSuffix(allowedDomain)
+        let lowercasedEmail = email.lowercased()
+        return allowedDomains.contains { lowercasedEmail.hasSuffix($0) }
     }
     
     // MARK: - Firebase Functions
@@ -109,7 +109,7 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
     }
     
     // Combined function for Sign Up, Storage, and Firestore Save
-    private func signUpAndSaveProfile(email: String, password: String, fullName: String, phone: String) {
+    private func signUpAndSaveProfile(email: String, password: String, fullName: String) {
         
         // --- STEP 1: Firebase Authentication (Sign Up) ---
         Auth.auth().createUser(withEmail: email, password: password) { [weak self] authResult, error in
@@ -153,7 +153,7 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
                 switch result {
                 case .success(let url):
                     // Image uploaded, now save Firestore data WITH the URL
-                    self.saveProfileDataToFirestore(uid: uid, fullName: fullName, phone: phone, email: email, profileImageUrl: url.absoluteString)
+                    self.saveProfileDataToFirestore(uid: uid, fullName: fullName, email: email, profileImageUrl: url.absoluteString)
                 case .failure(let error):
                     print("Failed to upload image: \(error.localizedDescription)")
                     DispatchQueue.main.async {
@@ -167,10 +167,9 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
     }
     
     // Dedicated Firestore saving logic
-    private func saveProfileDataToFirestore(uid: String, fullName: String, phone: String, email: String, profileImageUrl: String?) {
+    private func saveProfileDataToFirestore(uid: String, fullName: String, email: String, profileImageUrl: String?) {
         var profileData: [String: Any] = [
             "fullName": fullName,
-            "phone": phone,
             "email": email,
             "createdAt": FieldValue.serverTimestamp()
         ]
@@ -199,23 +198,9 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
     
     // Navigate to the appropriate screen after profile creation
     private func navigateAfterProfileCreation() {
-        // Check if there's a navigation controller
-        if let navigationController = self.navigationController {
-            // Pop back to the previous screen (likely OnboardingViewController)
-            navigationController.popViewController(animated: true)
-        } else {
-            // If no navigation controller, try to navigate to the main app screen
-            let storyboard = UIStoryboard(name: "Main", bundle: nil)
-            if let exploreVC = storyboard.instantiateViewController(withIdentifier: "ExploreVC") as? UIViewController {
-                // Present modally or set as root
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = windowScene.windows.first {
-                    let navController = UINavigationController(rootViewController: exploreVC)
-                    window.rootViewController = navController
-                    window.makeKeyAndVisible()
-                }
-            }
-        }
+        // Navigation is handled by segue in storyboard (to LoginVC)
+        // No need to programmatically navigate here as it causes conflicts
+        // The segue will automatically navigate to the login screen after profile creation
     }
     
     // MARK: - Validation Functions
@@ -244,18 +229,6 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
         return (true, nil)
     }
     
-    private func validatePhone(_ phone: String) -> (isValid: Bool, errorMessage: String?) {
-        // Remove common phone formatting characters for validation
-        let cleanedPhone = phone.replacingOccurrences(of: "[^0-9]", with: "", options: .regularExpression)
-        
-        // Check if phone has at least 10 digits (US phone number format)
-        if cleanedPhone.count < 10 {
-            return (false, "Please enter a valid phone number.")
-        }
-        
-        return (true, nil)
-    }
-    
     // MARK: - Actions (IBActions)
     @IBAction func createProfileButtonTapped(_ sender: UIButton) {
         
@@ -263,8 +236,7 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
         guard let email = emailDisplayTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty,
               let password = passwordTextField.text, !password.isEmpty,
               let confirmPassword = confirmPasswordTextField.text, !confirmPassword.isEmpty,
-              let fullName = fullNameTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !fullName.isEmpty,
-              let phone = phoneTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !phone.isEmpty else {
+              let fullName = fullNameTextField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !fullName.isEmpty else {
             
             showAlert(title: "Missing Fields", message: "Please fill in all required fields.")
             return
@@ -285,7 +257,8 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
         
         // 🔑 4. Check for UTEXAS Domain (Client-Side)
         if !isAllowedDomain(email: email) {
-            showAlert(title: "Invalid Email Domain", message: "Sign-up is restricted to email addresses ending with \(allowedDomain).")
+            let domainsList = allowedDomains.joined(separator: " or ")
+            showAlert(title: "Invalid Email Domain", message: "Sign-up is restricted to email addresses ending with \(domainsList).")
             return
         }
         
@@ -302,15 +275,8 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
             return
         }
         
-        // 7. Validate phone number
-        let phoneValidation = validatePhone(phone)
-        if !phoneValidation.isValid {
-            showAlert(title: "Invalid Phone Number", message: phoneValidation.errorMessage ?? "Please enter a valid phone number.")
-            return
-        }
-        
-        // 8. Perform Sign Up and Data Save
-        signUpAndSaveProfile(email: email, password: password, fullName: fullName, phone: phone)
+        // 7. Perform Sign Up and Data Save
+        signUpAndSaveProfile(email: email, password: password, fullName: fullName)
     }
     
     

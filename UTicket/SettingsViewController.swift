@@ -17,7 +17,13 @@ class SettingsViewController: UIViewController, UIImagePickerControllerDelegate,
     @IBOutlet weak var profileImageView: UIImageView!
     @IBOutlet weak var usernameLabel: UILabel!
     @IBOutlet weak var notificationSwitch: UISwitch!
+    @IBOutlet weak var changePasswordButton: UIButton?
+    @IBOutlet weak var signOutButton: UIButton?
+    @IBOutlet weak var roleLabel: UILabel?
+    @IBOutlet weak var roleButton: UIButton?
     
+    private let roles = ["Buyer", "Seller"]
+    private var currentRole: String = "Buyer" // Default role
     
     // MARK: - Properties
     private let storage = Storage.storage()
@@ -33,12 +39,101 @@ class SettingsViewController: UIViewController, UIImagePickerControllerDelegate,
         fetchUserProfile()
         loadNotificationPreference()
         setupNotificationSwitch()
+        setupRoleSelection()
+        loadCurrentRole()
+        setupConstraints()
     }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         // Update corner radius after layout is complete
         setupProfileDesign()
+    }
+    
+    // MARK: - Constraints Setup
+    private func setupConstraints() {
+        // Add explicit size constraints to ensure all UI elements have defined sizes
+        // Note: We're only adding size constraints, not disabling storyboard constraints
+        
+        // Profile Image View - Ensure it has explicit size (120x120 for circular profile)
+        if profileImageView.constraints.filter({ $0.firstAttribute == .width || $0.firstAttribute == .height }).isEmpty {
+            NSLayoutConstraint.activate([
+                profileImageView.widthAnchor.constraint(equalToConstant: 120),
+                profileImageView.heightAnchor.constraint(equalToConstant: 120)
+            ])
+        }
+        
+        // Username Label - Add minimum size constraints
+        let usernameSizeConstraints = usernameLabel.constraints.filter { 
+            $0.firstAttribute == .width || $0.firstAttribute == .height 
+        }
+        if usernameSizeConstraints.isEmpty {
+            NSLayoutConstraint.activate([
+                usernameLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
+                usernameLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 24)
+            ])
+        }
+        
+        // Notification Switch - Standard switch size (51x31)
+        let switchSizeConstraints = notificationSwitch.constraints.filter { 
+            $0.firstAttribute == .width || $0.firstAttribute == .height 
+        }
+        if switchSizeConstraints.isEmpty {
+            NSLayoutConstraint.activate([
+                notificationSwitch.widthAnchor.constraint(equalToConstant: 51),
+                notificationSwitch.heightAnchor.constraint(equalToConstant: 31)
+            ])
+        }
+        
+        // Find and add size constraints to buttons
+        if let changePasswordBtn = changePasswordButton ?? findButton(withTitle: "Change Password") {
+            let buttonSizeConstraints = changePasswordBtn.constraints.filter { 
+                $0.firstAttribute == .width || $0.firstAttribute == .height 
+            }
+            if buttonSizeConstraints.isEmpty {
+                NSLayoutConstraint.activate([
+                    changePasswordBtn.widthAnchor.constraint(equalToConstant: 201),
+                    changePasswordBtn.heightAnchor.constraint(equalToConstant: 35)
+                ])
+            }
+        }
+        
+        if let signOutBtn = signOutButton ?? findButton(withTitle: "Sign Out") {
+            let buttonSizeConstraints = signOutBtn.constraints.filter { 
+                $0.firstAttribute == .width || $0.firstAttribute == .height 
+            }
+            if buttonSizeConstraints.isEmpty {
+                NSLayoutConstraint.activate([
+                    signOutBtn.widthAnchor.constraint(equalToConstant: 201),
+                    signOutBtn.heightAnchor.constraint(equalToConstant: 35)
+                ])
+            }
+        }
+        
+        // Find and constrain notification label
+        if let notificationLabel = findLabel(withText: "Notifications") {
+            let labelSizeConstraints = notificationLabel.constraints.filter { 
+                $0.firstAttribute == .width || $0.firstAttribute == .height 
+            }
+            if labelSizeConstraints.isEmpty {
+                NSLayoutConstraint.activate([
+                    notificationLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 100),
+                    notificationLabel.heightAnchor.constraint(equalToConstant: 21)
+                ])
+            }
+        }
+    }
+    
+    // Helper method to find button by title
+    private func findButton(withTitle title: String) -> UIButton? {
+        return view.subviews.compactMap { $0 as? UIButton }
+            .first { $0.title(for: .normal) == title || $0.configuration?.title == title }
+    }
+    
+    // Helper method to find label by text
+    private func findLabel(withText text: String) -> UILabel? {
+        return view.subviews.compactMap { $0 as? UILabel }
+            .first { $0.text == text }
     }
     
     // MARK: - Profile Setup
@@ -426,4 +521,209 @@ class SettingsViewController: UIViewController, UIImagePickerControllerDelegate,
             }
         }
     }
+    
+    // MARK: - Role Selection Setup
+    
+    private func setupRoleSelection() {
+        // Create a button for role selection if it doesn't exist
+        if roleButton == nil {
+            let button = UIButton(type: .system)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.setTitle(currentRole, for: .normal)
+            button.titleLabel?.font = UIFont.systemFont(ofSize: 17, weight: .medium)
+            button.addTarget(self, action: #selector(roleButtonTapped), for: .touchUpInside)
+            view.addSubview(button)
+            roleButton = button
+            
+            // Add constraints for programmatic button
+            NSLayoutConstraint.activate([
+                button.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+                button.topAnchor.constraint(equalTo: usernameLabel.bottomAnchor, constant: 30),
+                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 150),
+                button.heightAnchor.constraint(equalToConstant: 44)
+            ])
+        } else {
+            roleButton?.addTarget(self, action: #selector(roleButtonTapped), for: .touchUpInside)
+        }
+        
+        // Make role label tappable as well
+        if let roleLabel = roleLabel {
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(roleButtonTapped))
+            roleLabel.addGestureRecognizer(tapGesture)
+            roleLabel.isUserInteractionEnabled = true
+        }
+    }
+    
+    @objc private func roleButtonTapped() {
+        showRoleSelectionActionSheet()
+    }
+    
+    private func showRoleSelectionActionSheet() {
+        let alert = UIAlertController(
+            title: "Select Role",
+            message: "Choose your role to switch between Buyer and Seller dashboards",
+            preferredStyle: .actionSheet
+        )
+        
+        // Add actions for each role
+        for role in roles {
+            let action = UIAlertAction(title: role, style: .default) { [weak self] _ in
+                self?.handleRoleSelection(role)
+            }
+            
+            // Mark current role with checkmark
+            if role == currentRole {
+                action.setValue(true, forKey: "checked")
+            }
+            
+            alert.addAction(action)
+        }
+        
+        // Add cancel action
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        alert.addAction(cancelAction)
+        
+        // For iPad support
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = roleButton ?? roleLabel
+            popover.sourceRect = (roleButton ?? roleLabel)?.bounds ?? CGRect.zero
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    private func handleRoleSelection(_ selectedRole: String) {
+        // Only navigate if role actually changed
+        if selectedRole != currentRole {
+            let previousRole = currentRole
+            
+            // Show confirmation alert before navigating
+            let alert = UIAlertController(
+                title: "Switch to \(selectedRole) Mode?",
+                message: "You will be navigated to the \(selectedRole) dashboard.",
+                preferredStyle: .alert
+            )
+            
+            let confirmAction = UIAlertAction(title: "Switch", style: .default) { [weak self] _ in
+                guard let self = self else { return }
+                self.currentRole = selectedRole
+                self.saveCurrentRole(selectedRole)
+                self.updateRoleDisplay()
+                self.navigateToRoleDashboard(selectedRole)
+            }
+            
+            let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+            
+            alert.addAction(confirmAction)
+            alert.addAction(cancelAction)
+            present(alert, animated: true)
+        } else {
+            // Role didn't change, just update display
+            updateRoleDisplay()
+        }
+    }
+    
+    private func loadCurrentRole() {
+        // Try to load from UserDefaults first
+        if let savedRole = UserDefaults.standard.string(forKey: "userRole"), !savedRole.isEmpty {
+            // Normalize the role (capitalize first letter)
+            let normalizedRole = savedRole.prefix(1).uppercased() + savedRole.dropFirst().lowercased()
+            if roles.contains(normalizedRole) {
+                currentRole = normalizedRole
+            } else {
+                // Default to Buyer if invalid role
+                currentRole = "Buyer"
+                UserDefaults.standard.set("Buyer", forKey: "userRole")
+            }
+        } else {
+            // Try to load from Firestore
+            guard let uid = Auth.auth().currentUser?.uid else {
+                // Default to Buyer if not logged in
+                currentRole = "Buyer"
+                updateRoleDisplay()
+                return
+            }
+            
+            db.collection("users").document(uid).getDocument { [weak self] (document, error) in
+                guard let self = self else { return }
+                
+                if let document = document, document.exists {
+                    if let role = document.data()?["role"] as? String {
+                        // Normalize the role
+                        let normalizedRole = role.prefix(1).uppercased() + role.dropFirst().lowercased()
+                        if self.roles.contains(normalizedRole) {
+                            self.currentRole = normalizedRole
+                            UserDefaults.standard.set(normalizedRole, forKey: "userRole")
+                        } else {
+                            // Default to Buyer if invalid role
+                            self.currentRole = "Buyer"
+                            UserDefaults.standard.set("Buyer", forKey: "userRole")
+                        }
+                    } else {
+                        // No role in Firestore, default to Buyer
+                        self.currentRole = "Buyer"
+                        UserDefaults.standard.set("Buyer", forKey: "userRole")
+                    }
+                } else {
+                    // Document doesn't exist, default to Buyer
+                    self.currentRole = "Buyer"
+                    UserDefaults.standard.set("Buyer", forKey: "userRole")
+                }
+                
+                DispatchQueue.main.async {
+                    self.updateRoleDisplay()
+                }
+            }
+        }
+        
+        updateRoleDisplay()
+    }
+    
+    private func updateRoleDisplay() {
+        roleLabel?.text = "Current Role: \(currentRole)"
+        roleButton?.setTitle(currentRole, for: .normal)
+    }
+    
+    private func saveCurrentRole(_ role: String) {
+        // Save to UserDefaults
+        UserDefaults.standard.set(role, forKey: "userRole")
+        
+        // Save to Firestore
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        
+        db.collection("users").document(uid).setData([
+            "role": role
+        ], merge: true) { error in
+            if let error = error {
+                print("Error saving role to Firestore: \(error.localizedDescription)")
+            } else {
+                print("✅ Role saved successfully: \(role)")
+            }
+        }
+    }
+    
+    private func navigateToRoleDashboard(_ role: String) {
+        let storyboard = UIStoryboard(name: "Main", bundle: nil)
+        
+        guard let navigationController = self.navigationController else {
+            print("Error: No navigation controller found")
+            return
+        }
+        
+        // Navigate to the appropriate dashboard
+        if role.lowercased() == "buyer" {
+            // Navigate to Buyer Dashboard (Explore Tickets)
+            if let exploreVC = storyboard.instantiateViewController(withIdentifier: "ExploreVC") as? UIViewController {
+                // Pop all view controllers and set explore as root
+                navigationController.setViewControllers([exploreVC], animated: true)
+            }
+        } else if role.lowercased() == "seller" {
+            // Navigate to Seller Dashboard
+            if let sellerVC = storyboard.instantiateViewController(withIdentifier: "sellerListing") as? UIViewController {
+                // Pop all view controllers and set seller dashboard as root
+                navigationController.setViewControllers([sellerVC], animated: true)
+            }
+        }
+    }
+    
 }

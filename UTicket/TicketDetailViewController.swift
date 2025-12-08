@@ -25,11 +25,11 @@ class TicketDetailViewController: BaseViewController {
     @IBOutlet weak var dateIconImageView: UIImageView!
     @IBOutlet weak var dateLabel: UILabel!
     
-    @IBOutlet weak var locationIconImageView: UIImageView!
-    @IBOutlet weak var locationLabel: UILabel!
-    
     @IBOutlet weak var seatIconImageView: UIImageView!
     @IBOutlet weak var seatLabel: UILabel!
+    
+    @IBOutlet weak var locationIconImageView: UIImageView!
+    @IBOutlet weak var locationLabel: UILabel!
     
     // MARK: - Data
     var listing: TicketListing?
@@ -64,10 +64,6 @@ class TicketDetailViewController: BaseViewController {
             dateLabel.text = l.eventTime
         }
         
-        // Location not stored in Firestore, hide location UI
-        locationIconImageView.isHidden = true
-        locationLabel.isHidden = true
-        
         seatIconImageView.image = UIImage(systemName: "person.3")
         seatIconImageView.tintColor = .systemGray
         seatLabel.text = l.seatDetails
@@ -100,7 +96,7 @@ class TicketDetailViewController: BaseViewController {
     }
     
     private func openStripePaymentLink() {
-        guard let url = URL(string: "https://buy.stripe.com/8x7sM02u7zD7bv6Lifbq00") else {
+        guard let url = URL(string: "https://buy.stripe.com/8x27sM02u7zD7bv6Lifbq00") else {
             print("Invalid Stripe URL")
             return
         }

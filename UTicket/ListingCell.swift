@@ -58,23 +58,6 @@ class ListingCell: UITableViewCell {
         return label
     }()
     
-    let locationImageView: UIImageView = {
-        let iv = UIImageView()
-        iv.image = UIImage(systemName: "mappin.and.ellipse")
-        iv.tintColor = .systemGray
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        return iv
-    }()
-    
-    let locationLabel: UILabel = {
-        let label = UILabel()
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = .secondaryLabel
-        label.numberOfLines = 2
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
-    }()
-    
     let seatImageView: UIImageView = {
         let iv = UIImageView()
         iv.image = UIImage(systemName: "person.3")
@@ -136,8 +119,6 @@ class ListingCell: UITableViewCell {
         contentView.addSubview(priceLabel)
         contentView.addSubview(dateLabel)
         contentView.addSubview(timeLabel)
-        contentView.addSubview(locationImageView)
-        contentView.addSubview(locationLabel)
         contentView.addSubview(seatImageView)
         contentView.addSubview(seatLabel)
         contentView.addSubview(statusLabel)
@@ -166,16 +147,7 @@ class ListingCell: UITableViewCell {
             timeLabel.centerYAnchor.constraint(equalTo: dateLabel.centerYAnchor),
             timeLabel.leadingAnchor.constraint(equalTo: dateLabel.trailingAnchor, constant: 6),
             
-            locationImageView.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 6),
-            locationImageView.leadingAnchor.constraint(equalTo: eventNameLabel.leadingAnchor),
-            locationImageView.widthAnchor.constraint(equalToConstant: 14),
-            locationImageView.heightAnchor.constraint(equalToConstant: 14),
-            
-            locationLabel.centerYAnchor.constraint(equalTo: locationImageView.centerYAnchor),
-            locationLabel.leadingAnchor.constraint(equalTo: locationImageView.trailingAnchor, constant: 4),
-            locationLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
-            
-            seatImageView.topAnchor.constraint(equalTo: locationLabel.bottomAnchor, constant: 4),
+            seatImageView.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 6),
             seatImageView.leadingAnchor.constraint(equalTo: eventNameLabel.leadingAnchor),
             seatImageView.widthAnchor.constraint(equalToConstant: 14),
             seatImageView.heightAnchor.constraint(equalToConstant: 14),
@@ -196,36 +168,21 @@ class ListingCell: UITableViewCell {
     }
     
     @objc private func heartButtonTapped() {
-        // Navigate to wishlist view controller
-        navigateToWishlist()
+        // Store the current state before toggling
+        let wasInWishlist = isInWishlist
+        let willBeAdding = !wasInWishlist
         
-        // Still call the closure for any additional handling (like updating wishlist state)
+        // Toggle the wishlist state for immediate UI feedback
         isInWishlist.toggle()
-        onHeartTapped?(isInWishlist)
-    }
-    
-    // Helper method to find the view controller containing this cell
-    private func findViewController() -> UIViewController? {
-        var responder: UIResponder? = self
-        while responder != nil {
-            responder = responder?.next
-            if let viewController = responder as? UIViewController {
-                return viewController
-            }
-        }
-        return nil
-    }
-    
-    // Navigate to wishlist view controller
-    private func navigateToWishlist() {
-        guard let viewController = findViewController() else {
-            print("Could not find view controller for navigation")
-            return
-        }
         
-        let storyboard = UIStoryboard(name: "Main", bundle: nil)
-        if let wishlistVC = storyboard.instantiateViewController(withIdentifier: "wishlist") as? UIViewController {
-            viewController.navigationController?.pushViewController(wishlistVC, animated: true)
+        // Call the closure to handle Firestore operations
+        // Pass true if adding, false if removing
+        if let handler = onHeartTapped {
+            handler(willBeAdding)
+        } else {
+            // If closure is not set, revert the toggle
+            print("Warning: onHeartTapped closure is not set for ListingCell")
+            isInWishlist = wasInWishlist
         }
     }
     
@@ -239,8 +196,6 @@ class ListingCell: UITableViewCell {
         priceLabel.text = listing.price
         dateLabel.text = listing.eventDate ?? "Date TBD"
         timeLabel.text = listing.eventTime
-        locationLabel.isHidden = true // Location not stored in Firestore
-        locationImageView.isHidden = true
         seatLabel.text = listing.seatDetails
         
         //    2. ⭐️ Fetch image using the shared ImageLoader
@@ -253,6 +208,9 @@ class ListingCell: UITableViewCell {
             statusLabel.isHidden = true
             heartButton.isHidden = false
             self.isInWishlist = isInWishlist
+            // Ensure heart button is enabled and interactive
+            heartButton.isEnabled = true
+            heartButton.isUserInteractionEnabled = true
             
         case .sellerMyTickets:
             //    For the seller, we show the status label based on isSold.
@@ -261,5 +219,13 @@ class ListingCell: UITableViewCell {
             statusLabel.textColor = listing.isSold ? .systemRed : .systemGreen
             heartButton.isHidden = true
         }
+    }
+    
+    // Reset cell state when reused
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        // Don't clear onHeartTapped here - it will be set in cellForRowAt
+        // But reset the wishlist state
+        isInWishlist = false
     }
 }
