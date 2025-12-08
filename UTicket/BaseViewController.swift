@@ -113,4 +113,64 @@ class BaseViewController: UIViewController {
 			NotificationManager.shared.showBanner(for: notification, notificationId: notificationId, in: self)
 		}
 	}
+	
+	// MARK: - Text Field Styling
+	
+	/// Sets up text field styling with active outline color
+	/// Call this method in viewDidLoad for each text field you want to style
+	func setupTextFieldStyling(_ textField: UITextField) {
+		// Set delegate to handle editing state changes
+		textField.delegate = self
+		
+		// Set initial border properties
+		textField.layer.borderWidth = 0
+		textField.layer.cornerRadius = 5
+		
+		// Add observers for editing state
+		textField.addTarget(self, action: #selector(textFieldDidBeginEditing(_:)), for: .editingDidBegin)
+		textField.addTarget(self, action: #selector(textFieldDidEndEditing(_:)), for: .editingDidEnd)
+	}
+	
+	@objc func textFieldDidBeginEditing(_ textField: UITextField) {
+		// Apply active outline color
+		textField.layer.borderWidth = 2.0
+		textField.layer.borderColor = UIColor(hex: "#BF5700")?.cgColor
+	}
+	
+	@objc func textFieldDidEndEditing(_ textField: UITextField) {
+		// Remove outline when editing ends
+		textField.layer.borderWidth = 0
+		textField.layer.borderColor = nil
+	}
+}
+
+// MARK: - UITextFieldDelegate
+extension BaseViewController: UITextFieldDelegate {
+	// Delegate methods can be overridden in subclasses if needed
+}
+
+// MARK: - UIColor Extension for Hex Colors
+extension UIColor {
+	convenience init?(hex: String) {
+		let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+		var int: UInt64 = 0
+		Scanner(string: hex).scanHexInt64(&int)
+		let a, r, g, b: UInt64
+		switch hex.count {
+		case 3: // RGB (12-bit)
+			(a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+		case 6: // RGB (24-bit)
+			(a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+		case 8: // ARGB (32-bit)
+			(a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+		default:
+			return nil
+		}
+		self.init(
+			red: CGFloat(r) / 255,
+			green: CGFloat(g) / 255,
+			blue: CGFloat(b) / 255,
+			alpha: CGFloat(a) / 255
+		)
+	}
 }

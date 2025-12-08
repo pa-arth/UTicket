@@ -39,6 +39,29 @@ class SellerListingViewController: BaseViewController, UIImagePickerControllerDe
         uploadImageArea.image = uploadIcon
         uploadImageArea.tintColor = .systemGray
         uploadImageArea.contentMode = .scaleAspectFit
+        
+        // Apply rounded corners to upload image area
+        setupImageCorners()
+        
+        // Setup text field styling
+        setupTextFieldStyling(eventNameTextField)
+        setupTextFieldStyling(eventDateDisplay)
+        setupTextFieldStyling(eventTimeDisplay)
+        setupTextFieldStyling(priceTextField)
+        setupTextFieldStyling(seatDetailsTextField)
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Ensure corner radius is applied after layout
+        setupImageCorners()
+    }
+    
+    // MARK: - Setup
+    
+    private func setupImageCorners() {
+        uploadImageArea.layer.cornerRadius = 10
+        uploadImageArea.clipsToBounds = true
     }
     
     // MARK: - Firebase Storage Upload (No change needed)

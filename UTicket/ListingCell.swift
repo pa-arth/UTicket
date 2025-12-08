@@ -21,7 +21,7 @@ class ListingCell: UITableViewCell {
         let iv = UIImageView()
         iv.contentMode = .scaleAspectFill
         iv.clipsToBounds = true
-        iv.layer.cornerRadius = 8
+        iv.layer.cornerRadius = 10
         iv.translatesAutoresizingMaskIntoConstraints = false
         return iv
     }()

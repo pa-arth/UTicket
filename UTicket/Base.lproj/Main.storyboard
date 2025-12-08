@@ -767,8 +767,8 @@
                         <rect key="frame" x="0.0" y="0.0" width="402" height="874"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <tableView clipsSubviews="YES" contentMode="scaleToFill" alwaysBounceVertical="YES" dataMode="prototypes" style="plain" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="-1" estimatedSectionHeaderHeight="-1" sectionFooterHeight="-1" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="cIR-my-Odl">
-                                <rect key="frame" x="0.0" y="124" width="402" height="633"/>
+                            <tableView clipsSubviews="YES" contentMode="scaleToFill" ambiguous="YES" alwaysBounceVertical="YES" dataMode="prototypes" style="plain" separatorStyle="default" rowHeight="-1" estimatedRowHeight="-1" sectionHeaderHeight="-1" estimatedSectionHeaderHeight="-1" sectionFooterHeight="-1" estimatedSectionFooterHeight="-1" translatesAutoresizingMaskIntoConstraints="NO" id="cIR-my-Odl">
+                                <rect key="frame" x="0.0" y="201" width="402" height="556"/>
                                 <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                 <prototypes>
                                     <tableViewCell clipsSubviews="YES" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" selectionStyle="blue" accessoryType="disclosureIndicator" hidesAccessoryWhenEditing="NO" indentationLevel="1" indentationWidth="0.0" reuseIdentifier="ListingCell" rowHeight="155" id="m8I-Lu-qwJ" customClass="ListingCell" customModule="UTicket" customModuleProvider="target">
@@ -838,14 +838,21 @@
                                     </tableViewCell>
                                 </prototypes>
                             </tableView>
+                            <searchBar contentMode="redraw" ambiguous="YES" placeholder="Search" translatesAutoresizingMaskIntoConstraints="NO" id="1Vc-Bx-zoW">
+                                <rect key="frame" x="0.0" y="124" width="402" height="44"/>
+                                <textInputTraits key="textInputTraits"/>
+                                <connections>
+                                    <outlet property="delegate" destination="3d5-c6-Uyd" id="4G5-SY-1rM"/>
+                                </connections>
+                            </searchBar>
                         </subviews>
                         <viewLayoutGuide key="safeArea" id="0iP-pJ-8KW"/>
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
-                            <constraint firstItem="0iP-pJ-8KW" firstAttribute="bottom" secondItem="cIR-my-Odl" secondAttribute="bottom" id="6XE-dJ-Qvo"/>
-                            <constraint firstItem="cIR-my-Odl" firstAttribute="leading" secondItem="0iP-pJ-8KW" secondAttribute="leading" id="GYL-lR-9tS"/>
-                            <constraint firstItem="cIR-my-Odl" firstAttribute="top" secondItem="0iP-pJ-8KW" secondAttribute="top" id="ZjL-wG-ABn"/>
-                            <constraint firstItem="0iP-pJ-8KW" firstAttribute="trailing" secondItem="cIR-my-Odl" secondAttribute="trailing" id="xtd-jV-SSj"/>
+                            <constraint firstItem="cIR-my-Odl" firstAttribute="trailing" secondItem="0iP-pJ-8KW" secondAttribute="trailing" id="2ds-l5-X8P"/>
+                            <constraint firstItem="cIR-my-Odl" firstAttribute="top" secondItem="1Vc-Bx-zoW" secondAttribute="bottom" constant="33" id="Ag7-Lr-K9G"/>
+                            <constraint firstItem="cIR-my-Odl" firstAttribute="leading" secondItem="0iP-pJ-8KW" secondAttribute="leading" id="iYG-lw-Guu"/>
+                            <constraint firstItem="cIR-my-Odl" firstAttribute="bottom" secondItem="0iP-pJ-8KW" secondAttribute="bottom" id="kNp-NT-2zT"/>
                         </constraints>
                     </view>
                     <toolbarItems/>
@@ -856,12 +863,13 @@
                     </navigationItem>
                     <simulatedToolbarMetrics key="simulatedBottomBarMetrics"/>
                     <connections>
+                        <outlet property="searchBar" destination="1Vc-Bx-zoW" id="fYq-ag-PgV"/>
                         <outlet property="tableView" destination="cIR-my-Odl" id="kcx-H6-2qy"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="wIl-kT-QD4" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
             </objects>
-            <point key="canvasLocation" x="1055" y="-686"/>
+            <point key="canvasLocation" x="1053.731343283582" y="-686.49885583524019"/>
         </scene>
         <!--Ticket Details-->
         <scene sceneID="SKS-fl-X9E">
@@ -872,13 +880,13 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="mI1-Bp-gQ3">
-                                <rect key="frame" x="16" y="78" width="370" height="180"/>
+                                <rect key="frame" x="16" y="140" width="370" height="180"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="180" id="NET-8L-2rf"/>
                                 </constraints>
                             </imageView>
                             <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="hq6-mc-xvl">
-                                <rect key="frame" x="40" y="752" width="322" height="48"/>
+                                <rect key="frame" x="40" y="669" width="322" height="48"/>
                                 <constraints>
                                     <constraint firstAttribute="height" constant="48" id="q2D-4s-dnh"/>
                                 </constraints>
@@ -1022,7 +1030,7 @@
         </scene>
     </scenes>
     <inferredMetricsTieBreakers>
-        <segue reference="f5Q-dO-M9K"/>
+        <segue reference="ftT-Dl-29M"/>
         <segue reference="3jC-OX-5Ic"/>
     </inferredMetricsTieBreakers>
     <resources>

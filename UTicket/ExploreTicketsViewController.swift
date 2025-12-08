@@ -12,9 +12,15 @@ import FirebaseAuth
 class ExploreTicketsViewController: BaseViewController {
     
     @IBOutlet weak var tableView: UITableView!
+    @IBOutlet weak var searchBar: UISearchBar!
     private var listings: [TicketListing] = []
     private var listingDocumentIDs: [String] = [] // Store document IDs for wishlist operations
     private var wishlistListingIDs: Set<String> = [] // Track which listings are in wishlist
+    
+    // Search filtering
+    private var filteredListings: [TicketListing] = []
+    private var filteredListingDocumentIDs: [String] = []
+    private var isSearching: Bool = false
     
     // ⭐️ ADDED: Database reference
     private let db = Firestore.firestore()
@@ -39,6 +45,9 @@ class ExploreTicketsViewController: BaseViewController {
         
         // Setup wishlist button action
         setupWishlistButton()
+        
+        // Setup search bar styling
+        setupSearchBarStyling()
         
         // ❌ REMOVED: tableView.reloadData() (It should happen after data is fetched)
     }
@@ -108,11 +117,55 @@ class ExploreTicketsViewController: BaseViewController {
                 }
             }
             
+            // Initialize filtered arrays to match all listings
+            self.filteredListings = self.listings
+            self.filteredListingDocumentIDs = self.listingDocumentIDs
+            
             // Reload the table on the main thread
             DispatchQueue.main.async {
-                self.tableView.reloadData()
+                // If currently searching, re-apply the search filter
+                if self.isSearching, let searchText = self.searchBar.text, !searchText.isEmpty {
+                    self.filterListings(searchText: searchText)
+                } else {
+                    self.tableView.reloadData()
+                }
             }
         }
+    }
+    
+    // MARK: - Search Functionality
+    
+    private func filterListings(searchText: String) {
+        let lowercasedSearch = searchText.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if lowercasedSearch.isEmpty {
+            // Show all listings if search is empty
+            filteredListings = listings
+            filteredListingDocumentIDs = listingDocumentIDs
+        } else {
+            // Filter listings based on search text
+            var filtered: [(listing: TicketListing, documentID: String)] = []
+            
+            for (index, listing) in listings.enumerated() {
+                let documentID = listingDocumentIDs[index]
+                
+                // Search in event name, seat details, price, event date, and event time
+                let eventNameMatch = listing.eventName.lowercased().contains(lowercasedSearch)
+                let seatDetailsMatch = listing.seatDetails.lowercased().contains(lowercasedSearch)
+                let priceMatch = listing.price.lowercased().contains(lowercasedSearch)
+                let eventDateMatch = listing.eventDate?.lowercased().contains(lowercasedSearch) ?? false
+                let eventTimeMatch = listing.eventTime.lowercased().contains(lowercasedSearch)
+                
+                if eventNameMatch || seatDetailsMatch || priceMatch || eventDateMatch || eventTimeMatch {
+                    filtered.append((listing, documentID))
+                }
+            }
+            
+            filteredListings = filtered.map { $0.listing }
+            filteredListingDocumentIDs = filtered.map { $0.documentID }
+        }
+        
+        tableView.reloadData()
     }
     
     // MARK: - Wishlist Methods
@@ -226,6 +279,98 @@ class ExploreTicketsViewController: BaseViewController {
                 }
         }
     }
+    
+    // MARK: - Search Bar Styling
+    
+    private func setupSearchBarStyling() {
+        searchBar.delegate = self
+        
+        // Set initial border properties
+        searchBar.layer.borderWidth = 0
+        searchBar.layer.cornerRadius = 5
+        
+        // Customize search bar appearance
+        if let textField = searchBar.value(forKey: "searchField") as? UITextField {
+            textField.layer.borderWidth = 0
+            textField.layer.cornerRadius = 5
+            textField.backgroundColor = .systemBackground
+            
+            // Add observers for editing state
+            textField.addTarget(self, action: #selector(textFieldDidBeginEditingInSearchBar(_:)), for: .editingDidBegin)
+            textField.addTarget(self, action: #selector(textFieldDidEndEditingInSearchBar(_:)), for: .editingDidEnd)
+        }
+    }
+    
+    @objc private func textFieldDidBeginEditingInSearchBar(_ textField: UITextField) {
+        // Apply active outline color to the text field only
+        textField.layer.borderWidth = 2.0
+        textField.layer.borderColor = UIColor(hex: "#BF5700")?.cgColor
+    }
+    
+    @objc private func textFieldDidEndEditingInSearchBar(_ textField: UITextField) {
+        // Remove outline when editing ends
+        textField.layer.borderWidth = 0
+        textField.layer.borderColor = nil
+    }
+}
+
+// MARK: - UISearchBarDelegate
+extension ExploreTicketsViewController: UISearchBarDelegate {
+    func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
+        // Show cancel button
+        searchBar.showsCancelButton = true
+        
+        // Apply active outline color to the internal text field only
+        if let textField = searchBar.value(forKey: "searchField") as? UITextField {
+            textField.layer.borderWidth = 2.0
+            textField.layer.borderColor = UIColor(hex: "#BF5700")?.cgColor
+        }
+        
+        isSearching = true
+    }
+    
+    func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
+        // Remove outline when editing ends (but keep searching if there's text)
+        if let textField = searchBar.value(forKey: "searchField") as? UITextField {
+            if let searchText = searchBar.text, !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // Keep border if there's search text
+                textField.layer.borderWidth = 2.0
+                textField.layer.borderColor = UIColor(hex: "#BF5700")?.cgColor
+            } else {
+                // Remove border if search is empty
+                textField.layer.borderWidth = 0
+                textField.layer.borderColor = nil
+            }
+        }
+    }
+    
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        // Filter listings as user types
+        isSearching = true
+        filterListings(searchText: searchText)
+    }
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        // Dismiss keyboard when search button is tapped
+        searchBar.resignFirstResponder()
+    }
+    
+    func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
+        // Clear search and show all listings
+        searchBar.text = ""
+        searchBar.resignFirstResponder()
+        searchBar.showsCancelButton = false
+        isSearching = false
+        filteredListings = listings
+        filteredListingDocumentIDs = listingDocumentIDs
+        tableView.reloadData()
+        
+        // Remove outline from text field
+        if let textField = searchBar.value(forKey: "searchField") as? UITextField {
+            textField.layer.borderWidth = 0
+            textField.layer.borderColor = nil
+        }
+    }
 }
 
 // MARK: - UITableViewDataSource, UITableViewDelegate
@@ -233,12 +378,12 @@ class ExploreTicketsViewController: BaseViewController {
 extension ExploreTicketsViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return listings.count
+        return isSearching ? filteredListings.count : listings.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let listing = listings[indexPath.row]
-        let listingId = listingDocumentIDs[indexPath.row]
+        let listing = isSearching ? filteredListings[indexPath.row] : listings[indexPath.row]
+        let listingId = isSearching ? filteredListingDocumentIDs[indexPath.row] : listingDocumentIDs[indexPath.row]
         let isInWishlist = wishlistListingIDs.contains(listingId)
         
         // ⭐️ Dequeue the custom ListingCell
@@ -274,6 +419,7 @@ extension ExploreTicketsViewController: UITableViewDataSource, UITableViewDelega
     // Handles the tap and performs the segue
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        performSegue(withIdentifier: "showTicketDetail", sender: listings[indexPath.row])
+        let listing = isSearching ? filteredListings[indexPath.row] : listings[indexPath.row]
+        performSegue(withIdentifier: "showTicketDetail", sender: listing)
     }
 }

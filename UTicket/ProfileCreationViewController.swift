@@ -42,6 +42,12 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
         // Set a default/placeholder image and style
         profilePhotoArea.image = UIImage(systemName: "person.circle.fill")
         profilePhotoArea.tintColor = .systemGray4
+        
+        // Setup text field styling
+        setupTextFieldStyling(fullNameTextField)
+        setupTextFieldStyling(emailDisplayTextField)
+        setupTextFieldStyling(passwordTextField)
+        setupTextFieldStyling(confirmPasswordTextField)
     }
     
     override func viewDidLayoutSubviews() {
@@ -350,4 +356,37 @@ class ProfileCreationViewController: UIViewController, UIImagePickerControllerDe
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
     }
+    
+    // MARK: - Text Field Styling
+    
+    /// Sets up text field styling with active outline color
+    func setupTextFieldStyling(_ textField: UITextField) {
+        // Set delegate to handle editing state changes
+        textField.delegate = self
+        
+        // Set initial border properties
+        textField.layer.borderWidth = 0
+        textField.layer.cornerRadius = 5
+        
+        // Add observers for editing state
+        textField.addTarget(self, action: #selector(textFieldDidBeginEditing(_:)), for: .editingDidBegin)
+        textField.addTarget(self, action: #selector(textFieldDidEndEditing(_:)), for: .editingDidEnd)
+    }
+    
+    @objc func textFieldDidBeginEditing(_ textField: UITextField) {
+        // Apply active outline color
+        textField.layer.borderWidth = 2.0
+        textField.layer.borderColor = UIColor(hex: "#BF5700")?.cgColor
+    }
+    
+    @objc func textFieldDidEndEditing(_ textField: UITextField) {
+        // Remove outline when editing ends
+        textField.layer.borderWidth = 0
+        textField.layer.borderColor = nil
+    }
+}
+
+// MARK: - UITextFieldDelegate
+extension ProfileCreationViewController: UITextFieldDelegate {
+    // Delegate methods can be overridden if needed
 }

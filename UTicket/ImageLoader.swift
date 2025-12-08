@@ -27,7 +27,14 @@ class ImageLoader {
             return
         }
         
-        //    2. Use Kingfisher to handle the asynchronous loading, caching, and setting
+        //    2. Apply rounded corners if not already set (skip if imageView is circular/profile)
+        //    Only apply if cornerRadius is 0 or very small (not a circular profile image)
+        if imageView.layer.cornerRadius < 5 {
+            imageView.layer.cornerRadius = 10
+            imageView.clipsToBounds = true
+        }
+        
+        //    3. Use Kingfisher to handle the asynchronous loading, caching, and setting
         //    All UIImageView property access is now safely on the Main Actor.
         imageView.kf.indicatorType = .activity //    Show a loading indicator
         imageView.kf.setImage(

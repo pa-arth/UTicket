@@ -40,7 +40,16 @@ class TicketDetailViewController: BaseViewController {
         title = "Ticket Details"
         view.backgroundColor = .systemBackground
         
+        setupImageCorners()
         configureViewDetails()
+    }
+    
+    // MARK: - Setup
+    
+    private func setupImageCorners() {
+        // Apply rounded corners to ticket image
+        ticketImageView.layer.cornerRadius = 10
+        ticketImageView.clipsToBounds = true
     }
     
     // MARK: - Configuration
