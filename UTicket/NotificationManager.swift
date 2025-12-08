@@ -209,11 +209,9 @@ class NotificationManager {
         listener?.remove()
         shownNotificationIds.removeAll()
         
-        // Listen for unread notifications
+        // Listen for all notifications for this user (filter and sort in memory to avoid composite index)
         listener = db.collection(notificationsCollection)
             .whereField("userId", isEqualTo: userId)
-            .whereField("isRead", isEqualTo: false)
-            .order(by: "createdAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let self = self else { return }
                 
@@ -237,22 +235,34 @@ class NotificationManager {
                         return
                     }
                     
-                    // Process new notifications
-                    for document in documents {
-                        let notificationId = document.documentID
-                        
-                        // Skip if we've already shown this notification
-                        if self.shownNotificationIds.contains(notificationId) {
-                            continue
-                        }
-                        
+                    // Filter unread notifications and sort by createdAt in memory
+                    let unreadNotifications = documents.compactMap { doc -> (AppNotification, String)? in
                         do {
-                            var notification = try document.data(as: AppNotification.self)
-                            self.shownNotificationIds.insert(notificationId)
-                            completion(notification, notificationId)
+                            var notification = try doc.data(as: AppNotification.self)
+                            // Only process unread notifications
+                            guard !notification.isRead else { return nil }
+                            
+                            let notificationId = doc.documentID
+                            // Skip if we've already shown this notification
+                            guard !self.shownNotificationIds.contains(notificationId) else { return nil }
+                            
+                            return (notification, notificationId)
                         } catch {
                             print("Error decoding notification: \(error)")
+                            return nil
                         }
+                    }
+                    .sorted { first, second in
+                        // Sort by createdAt descending (most recent first)
+                        let firstTime = first.0.createdAt?.dateValue() ?? Date.distantPast
+                        let secondTime = second.0.createdAt?.dateValue() ?? Date.distantPast
+                        return firstTime > secondTime
+                    }
+                    
+                    // Process new notifications
+                    for (notification, notificationId) in unreadNotifications {
+                        self.shownNotificationIds.insert(notificationId)
+                        completion(notification, notificationId)
                     }
                 }
             }

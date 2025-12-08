@@ -36,9 +36,15 @@ class WishlistViewController: BaseViewController {
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "showTicketDetailFromWishlist",
-           let dest = segue.destination as? TicketDetailViewController,
-           let listing = sender as? TicketListing {
-            dest.listing = listing
+           let dest = segue.destination as? TicketDetailViewController {
+            // Handle both tuple (new way) and TicketListing (fallback)
+            if let tuple = sender as? (listing: TicketListing, documentID: String) {
+                dest.listing = tuple.listing
+                dest.listingDocumentID = tuple.documentID
+            } else if let listing = sender as? TicketListing {
+                // Fallback for old code paths
+                dest.listing = listing
+            }
         }
     }
     
@@ -138,10 +144,9 @@ class WishlistViewController: BaseViewController {
     private func removeFromWishlist(listingId: String) {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
-        // Remove from wishlist using the listing document ID
+        // Remove from wishlist - fetch all user's wishlist items and filter in memory to avoid composite index
         db.collection(wishlistCollectionName)
             .whereField("userId", isEqualTo: userId)
-            .whereField("listingId", isEqualTo: listingId)
             .getDocuments { [weak self] snapshot, error in
                 guard let self = self else { return }
                 
@@ -150,7 +155,17 @@ class WishlistViewController: BaseViewController {
                     return
                 }
                 
-                guard let documents = snapshot?.documents, !documents.isEmpty else {
+                guard let documents = snapshot?.documents else {
+                    print("Wishlist item not found")
+                    return
+                }
+                
+                // Filter in memory to find matching listingId
+                let matchingDocs = documents.filter { doc in
+                    return (doc.data()["listingId"] as? String) == listingId
+                }
+                
+                guard !matchingDocs.isEmpty else {
                     print("Wishlist item not found")
                     return
                 }
@@ -159,7 +174,7 @@ class WishlistViewController: BaseViewController {
                 let dispatchGroup = DispatchGroup()
                 var hasError = false
                 
-                for document in documents {
+                for document in matchingDocs {
                     dispatchGroup.enter()
                     document.reference.delete { error in
                         if let error = error {
@@ -217,6 +232,12 @@ extension WishlistViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        performSegue(withIdentifier: "showTicketDetailFromWishlist", sender: wishlistItems[indexPath.row])
+        guard indexPath.row < wishlistItems.count && indexPath.row < wishlistListingIDs.count else {
+            return
+        }
+        let listing = wishlistItems[indexPath.row]
+        let listingId = wishlistListingIDs[indexPath.row]
+        // Pass both listing and document ID as a tuple
+        performSegue(withIdentifier: "showTicketDetailFromWishlist", sender: (listing: listing, documentID: listingId))
     }
 }

@@ -32,6 +32,17 @@ class ExploreTicketsViewController: BaseViewController {
         title = "Explore Tickets"
         view.backgroundColor = .systemBackground
         
+        // Check if outlets are connected
+        guard tableView != nil else {
+            print("❌ ERROR: tableView outlet is not connected!")
+            return
+        }
+        
+        guard searchBar != nil else {
+            print("❌ ERROR: searchBar outlet is not connected!")
+            return
+        }
+        
         tableView.dataSource = self
         tableView.delegate = self
         
@@ -49,6 +60,7 @@ class ExploreTicketsViewController: BaseViewController {
         // Setup search bar styling
         setupSearchBarStyling()
         
+        print("✅ ExploreTicketsViewController viewDidLoad completed")
         // ❌ REMOVED: tableView.reloadData() (It should happen after data is fetched)
     }
     
@@ -81,6 +93,7 @@ class ExploreTicketsViewController: BaseViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        print("📱 ExploreTicketsViewController viewWillAppear called")
         // ⭐️ CALL FETCH LOGIC: Fetches data every time the view appears.
         fetchExploreListings()
         fetchWishlistStatus()
@@ -88,34 +101,82 @@ class ExploreTicketsViewController: BaseViewController {
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "showTicketDetail",
-            let dest = segue.destination as? TicketDetailViewController,
-            let listing = sender as? TicketListing {
-            dest.listing = listing
+            let dest = segue.destination as? TicketDetailViewController {
+            // Handle both tuple (new way) and TicketListing (fallback)
+            if let tuple = sender as? (listing: TicketListing, documentID: String) {
+                dest.listing = tuple.listing
+                dest.listingDocumentID = tuple.documentID
+            } else if let listing = sender as? TicketListing {
+                // Fallback for old code paths
+                dest.listing = listing
+            }
         }
     }
     
     // ⭐️ ADDED: Firestore Fetch Method
     func fetchExploreListings() {
+        print("🔍 Fetching listings from collection: \(listingCollectionName)")
+        
         db.collection(listingCollectionName).getDocuments { [weak self] snapshot, error in
             guard let self = self else { return }
             
             if let error = error {
-                print("Error fetching explore documents: \(error)")
+                print("❌ Error fetching explore documents: \(error.localizedDescription)")
+                print("   Full error: \(error)")
+                DispatchQueue.main.async {
+                    // Show empty state or error message
+                    self.listings = []
+                    self.listingDocumentIDs = []
+                    self.filteredListings = []
+                    self.filteredListingDocumentIDs = []
+                    self.tableView.reloadData()
+                }
                 return
             }
             
-            guard let documents = snapshot?.documents else { return }
+            guard let snapshot = snapshot else {
+                print("⚠️ Snapshot is nil")
+                DispatchQueue.main.async {
+                    self.listings = []
+                    self.listingDocumentIDs = []
+                    self.filteredListings = []
+                    self.filteredListingDocumentIDs = []
+                    self.tableView.reloadData()
+                }
+                return
+            }
+            
+            let documents = snapshot.documents
+            print("✅ Fetched \(documents.count) documents from Firestore")
+            
+            if documents.isEmpty {
+                print("⚠️ No documents found in collection '\(self.listingCollectionName)'")
+            }
             
             // Store document IDs and decode listings
             self.listingDocumentIDs = documents.map { $0.documentID }
-            self.listings = documents.compactMap { doc -> TicketListing? in
+            var decodedListings: [TicketListing] = []
+            var decodeErrors = 0
+            
+            for doc in documents {
                 do {
-                    return try doc.data(as: TicketListing.self)
+                    let listing = try doc.data(as: TicketListing.self)
+                    decodedListings.append(listing)
                 } catch {
-                    print("Error decoding document: \(error)")
-                    return nil
+                    decodeErrors += 1
+                    print("❌ Error decoding document \(doc.documentID): \(error)")
+                    if let data = doc.data() as? [String: Any] {
+                        print("   Document data: \(data)")
+                    }
                 }
             }
+            
+            if decodeErrors > 0 {
+                print("⚠️ Failed to decode \(decodeErrors) out of \(documents.count) documents")
+            }
+            
+            print("✅ Successfully decoded \(decodedListings.count) listings")
+            self.listings = decodedListings
             
             // Initialize filtered arrays to match all listings
             self.filteredListings = self.listings
@@ -123,11 +184,85 @@ class ExploreTicketsViewController: BaseViewController {
             
             // Reload the table on the main thread
             DispatchQueue.main.async {
+                print("🔄 Reloading table view with \(self.listings.count) listings")
+                
+                // CRITICAL FIX: If table view has zero height, fix it immediately
+                if self.tableView.frame.height == 0 {
+                    print("⚠️ CRITICAL: Table view has zero height! Fixing...")
+                    print("   Search bar frame: \(self.searchBar.frame)")
+                    print("   View safe area frame: \(self.view.safeAreaLayoutGuide.layoutFrame)")
+                    print("   View bounds: \(self.view.bounds)")
+                    
+                    // Calculate available height more accurately
+                    let viewHeight = self.view.bounds.height
+                    let safeAreaTop = self.view.safeAreaLayoutGuide.layoutFrame.minY
+                    let safeAreaBottom = self.view.safeAreaLayoutGuide.layoutFrame.maxY
+                    let searchBarHeight = self.searchBar.frame.height
+                    let navBarHeight = self.navigationController?.navigationBar.frame.height ?? 0
+                    
+                    // Available height = total view height - safe area top - search bar - navigation bar - some padding
+                    let availableHeight = viewHeight - safeAreaTop - searchBarHeight - 16 // 16pt total padding
+                    
+                    print("   Calculated available height: \(availableHeight)")
+                    
+                    if availableHeight > 100 { // Only fix if we have reasonable space
+                        // Try to find and update height constraint
+                        var heightConstraintFound = false
+                        
+                        // Check view constraints
+                        for constraint in self.view.constraints {
+                            if (constraint.firstItem === self.tableView || constraint.secondItem === self.tableView) &&
+                               (constraint.firstAttribute == .height || constraint.secondAttribute == .height) {
+                                constraint.constant = availableHeight
+                                heightConstraintFound = true
+                                print("   Found and updated height constraint in view")
+                                break
+                            }
+                        }
+                        
+                        // Check table view's own constraints
+                        if !heightConstraintFound {
+                            for constraint in self.tableView.constraints {
+                                if constraint.firstAttribute == .height {
+                                    constraint.constant = availableHeight
+                                    heightConstraintFound = true
+                                    print("   Found and updated height constraint in table view")
+                                    break
+                                }
+                            }
+                        }
+                        
+                        // If no constraint found, try setting frame directly (might work if autolayout isn't fully set up)
+                        if !heightConstraintFound && self.tableView.translatesAutoresizingMaskIntoConstraints {
+                            var frame = self.tableView.frame
+                            frame.size.height = availableHeight
+                            self.tableView.frame = frame
+                            print("   Updated frame directly (frame-based layout)")
+                        }
+                        
+                        // Force layout update
+                        self.view.setNeedsLayout()
+                        self.view.layoutIfNeeded()
+                        
+                        print("✅ Fixed table view. New frame: \(self.tableView.frame)")
+                    } else {
+                        print("⚠️ Available height too small (\(availableHeight)), skipping fix")
+                    }
+                }
+                
+                print("   Table view frame: \(self.tableView.frame)")
+                
                 // If currently searching, re-apply the search filter
                 if self.isSearching, let searchText = self.searchBar.text, !searchText.isEmpty {
                     self.filterListings(searchText: searchText)
                 } else {
+                    // Reload the table view
                     self.tableView.reloadData()
+                    
+                    // Scroll to top to ensure visibility
+                    if !self.listings.isEmpty {
+                        self.tableView.scrollToRow(at: IndexPath(row: 0, section: 0), at: .top, animated: false)
+                    }
                 }
             }
         }
@@ -228,10 +363,9 @@ class ExploreTicketsViewController: BaseViewController {
                 }
             }
         } else {
-            // Remove from wishlist
+            // Remove from wishlist - fetch all user's wishlist items and filter in memory to avoid composite index
             db.collection(wishlistCollectionName)
                 .whereField("userId", isEqualTo: userId)
-                .whereField("listingId", isEqualTo: listingId)
                 .getDocuments { [weak self] snapshot, error in
                     guard let self = self else {
                         completion(false)
@@ -244,7 +378,18 @@ class ExploreTicketsViewController: BaseViewController {
                         return
                     }
                     
-                    guard let documents = snapshot?.documents, !documents.isEmpty else {
+                    guard let documents = snapshot?.documents else {
+                        print("No wishlist item found to remove")
+                        completion(false)
+                        return
+                    }
+                    
+                    // Filter in memory to find matching listingId
+                    let matchingDocs = documents.filter { doc in
+                        return (doc.data()["listingId"] as? String) == listingId
+                    }
+                    
+                    guard !matchingDocs.isEmpty else {
                         print("No wishlist item found to remove")
                         completion(false)
                         return
@@ -254,7 +399,7 @@ class ExploreTicketsViewController: BaseViewController {
                     let dispatchGroup = DispatchGroup()
                     var hasError = false
                     
-                    for document in documents {
+                    for document in matchingDocs {
                         dispatchGroup.enter()
                         document.reference.delete { error in
                             if let error = error {
@@ -378,19 +523,28 @@ extension ExploreTicketsViewController: UISearchBarDelegate {
 extension ExploreTicketsViewController: UITableViewDataSource, UITableViewDelegate {
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return isSearching ? filteredListings.count : listings.count
+        let count = isSearching ? filteredListings.count : listings.count
+        if count == 0 {
+            print("⚠️ numberOfRowsInSection returning 0 (isSearching: \(isSearching), listings: \(listings.count), filtered: \(filteredListings.count))")
+        }
+        return count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        print("📱 cellForRowAt called for indexPath: \(indexPath)")
         let listing = isSearching ? filteredListings[indexPath.row] : listings[indexPath.row]
         let listingId = isSearching ? filteredListingDocumentIDs[indexPath.row] : listingDocumentIDs[indexPath.row]
         let isInWishlist = wishlistListingIDs.contains(listingId)
         
+        print("   Configuring cell for listing: \(listing.eventName)")
+        
         // ⭐️ Dequeue the custom ListingCell
         guard let cell = tableView.dequeueReusableCell(withIdentifier: "ListingCell", for: indexPath) as? ListingCell else {
+            print("❌ Failed to dequeue ListingCell, returning default cell")
             return UITableViewCell()
         }
         
+        print("   ✅ Successfully dequeued ListingCell")
         cell.configure(with: listing, mode: .buyerWishlist, isInWishlist: isInWishlist)
         
         // Set up heart button tap handler
@@ -420,6 +574,8 @@ extension ExploreTicketsViewController: UITableViewDataSource, UITableViewDelega
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let listing = isSearching ? filteredListings[indexPath.row] : listings[indexPath.row]
-        performSegue(withIdentifier: "showTicketDetail", sender: listing)
+        let listingId = isSearching ? filteredListingDocumentIDs[indexPath.row] : listingDocumentIDs[indexPath.row]
+        // Pass both listing and document ID as a tuple
+        performSegue(withIdentifier: "showTicketDetail", sender: (listing: listing, documentID: listingId))
     }
 }

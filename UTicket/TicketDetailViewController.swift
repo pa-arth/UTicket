@@ -33,6 +33,7 @@ class TicketDetailViewController: BaseViewController {
     
     // MARK: - Data
     var listing: TicketListing?
+    var listingDocumentID: String? // Store document ID to avoid querying
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -85,21 +86,35 @@ class TicketDetailViewController: BaseViewController {
             return
         }
         
-        // Find the listing document ID
-        findListingDocumentId(listing: listing) { [weak self] listingId in
-            if let listingId = listingId {
-                // Create purchase interest notification for seller
-                NotificationManager.shared.createPurchaseInterestNotification(
-                    listingId: listingId,
-                    listingName: listing.eventName,
-                    sellerId: listing.sellerID,
-                    buyerId: buyerId
-                )
-            }
+        // Use stored document ID if available, otherwise find it
+        if let listingId = listingDocumentID {
+            // Create purchase interest notification for seller
+            NotificationManager.shared.createPurchaseInterestNotification(
+                listingId: listingId,
+                listingName: listing.eventName,
+                sellerId: listing.sellerID,
+                buyerId: buyerId
+            )
             
             // Open Stripe payment link
-            DispatchQueue.main.async {
-                self?.openStripePaymentLink()
+            openStripePaymentLink()
+        } else {
+            // Fallback: find the listing document ID (should rarely be needed)
+            findListingDocumentId(listing: listing) { [weak self] listingId in
+                if let listingId = listingId {
+                    // Create purchase interest notification for seller
+                    NotificationManager.shared.createPurchaseInterestNotification(
+                        listingId: listingId,
+                        listingName: listing.eventName,
+                        sellerId: listing.sellerID,
+                        buyerId: buyerId
+                    )
+                }
+                
+                // Open Stripe payment link
+                DispatchQueue.main.async {
+                    self?.openStripePaymentLink()
+                }
             }
         }
     }
@@ -115,12 +130,10 @@ class TicketDetailViewController: BaseViewController {
     }
     
     private func findListingDocumentId(listing: TicketListing, completion: @escaping (String?) -> Void) {
+        // Use a simpler query with just sellerID to avoid composite index
+        // Then filter in memory
         db.collection("ticketListings")
             .whereField("sellerID", isEqualTo: listing.sellerID)
-            .whereField("eventName", isEqualTo: listing.eventName)
-            .whereField("price", isEqualTo: listing.price)
-            .whereField("seatDetails", isEqualTo: listing.seatDetails)
-            .limit(to: 1)
             .getDocuments { snapshot, error in
                 if let error = error {
                     print("Error finding listing ID: \(error)")
@@ -128,13 +141,21 @@ class TicketDetailViewController: BaseViewController {
                     return
                 }
                 
-                guard let document = snapshot?.documents.first else {
+                guard let documents = snapshot?.documents else {
                     print("Listing not found")
                     completion(nil)
                     return
                 }
                 
-                completion(document.documentID)
+                // Filter in memory to match all fields
+                let matchingDoc = documents.first { doc in
+                    let data = doc.data()
+                    return (data["eventName"] as? String) == listing.eventName &&
+                           (data["price"] as? String) == listing.price &&
+                           (data["seatDetails"] as? String) == listing.seatDetails
+                }
+                
+                completion(matchingDoc?.documentID)
             }
     }
 }
